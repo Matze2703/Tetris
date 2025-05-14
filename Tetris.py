@@ -16,7 +16,7 @@ BLACK = (0, 0, 0)
 GREY = (200, 200, 200)
 DARKGREY = (50, 50, 50)
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
@@ -26,7 +26,7 @@ state = MENU
 
 font = pygame.font.SysFont("Arial", 40)
 
-# Shapes
+# Shapes and Colors
 SHAPES = {
     'I': [[1, 1, 1, 1]],
     'O': [[1, 1], [1, 1]],
@@ -36,7 +36,6 @@ SHAPES = {
     'J': [[1, 0, 0], [1, 1, 1]],
     'L': [[0, 0, 1], [1, 1, 1]],
 }
-
 SHAPE_COLORS = {
     'I': (0, 255, 255),
     'O': (255, 255, 0),
@@ -62,22 +61,19 @@ class Button:
         surface.blit(txt_surface, txt_rect)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.rect.collidepoint(event.pos):
-                self.callback()
+        if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+            self.callback()
 
-# Transitions
+# Transition
 transition_target = None
 transition_y = HEIGHT
 
-# Game vars
 def start_transition(target_state):
     global state, transition_target, transition_y
     transition_target = target_state
     transition_y = HEIGHT
     state = TRANSITION
 
-# State functions
 def start_game():
     reset_game()
     start_transition(GAME)
@@ -88,11 +84,14 @@ def return_to_menu():
 def resume_game():
     start_transition(GAME)
 
-menu_buttons = [Button("Start Game", WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50, start_game)]
-pause_buttons = [
-    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
-]
+def get_menu_buttons(width, height):
+    return [Button("Start Game", width // 2 - 100, height // 2 + 50, 200, 50, start_game)]
+
+def get_pause_buttons(width, height):
+    return [
+        Button("Continue", width // 2 - 100, height // 2 - 60, 200, 50, resume_game),
+        Button("Main Menu", width // 2 - 100, height // 2 + 10, 200, 50, return_to_menu),
+    ]
 
 # Game logic
 score = 0
@@ -177,7 +176,7 @@ def reset_game():
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
     current_piece = create_piece()
     fall_time = 0
-    fall_speed = 500  # ms
+    fall_speed = 500
     score = 0
     level = 1
     lines_cleared = 0
@@ -188,8 +187,7 @@ def get_ghost_piece(piece):
         ghost['y'] += 1
     return ghost
 
-# Drawing
-
+# Drawing functions
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
         for x in range(COLS):
@@ -221,21 +219,38 @@ def draw_text_centered(text, size, y, colour=BLACK):
     txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
     screen.blit(txt_surface, txt_rect)
 
-# Game loop
+# Hintergrundbild laden
+bg_tile = pygame.image.load("Background.png").convert()
+tile_width, tile_height = bg_tile.get_size()
+
+def draw_background():
+    for x in range(0, WIDTH, tile_width):
+        for y in range(0, HEIGHT, tile_height):
+            screen.blit(bg_tile, (x, y))
+
+
+def update_GUI():
+    global WIDTH, HEIGHT
+    WIDTH, HEIGHT = screen.get_size()
+    screen.fill(WHITE)
+    draw_background()
+
+# Main Loop
 reset_game()
 running = True
 last_fall = pygame.time.get_ticks()
 
 while running:
-    screen.fill(WHITE)
+    update_GUI()
     clock.tick(FPS)
     now = pygame.time.get_ticks()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
         if state == MENU:
-            for btn in menu_buttons:
+            for btn in get_menu_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
         elif state == GAME:
             if event.type == pygame.KEYDOWN:
@@ -254,7 +269,7 @@ while running:
                 elif event.key == pygame.K_SPACE:
                     hard_drop()
         elif state == PAUSE:
-            for btn in pause_buttons:
+            for btn in get_pause_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
 
     if state == GAME and now - last_fall > fall_speed:
@@ -266,7 +281,7 @@ while running:
 
     if state == MENU:
         draw_text_centered("★ TETRIS ★", 80, HEIGHT // 2 - 120, (30, 30, 150))
-        for btn in menu_buttons:
+        for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
     elif state == GAME:
@@ -282,7 +297,7 @@ while running:
 
     elif state == PAUSE:
         draw_text_centered("PAUSED", 60, HEIGHT // 2 - 120)
-        for btn in pause_buttons:
+        for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
     elif state == TRANSITION:
@@ -296,7 +311,3 @@ while running:
 
 pygame.quit()
 sys.exit()
-
-#Kommentar
-
-#yes
