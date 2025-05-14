@@ -3,7 +3,9 @@ import pygame, sys, random, time
 
 pygame.init()
 
-# Constants
+#############
+# CONSTANTS #
+#############
 WIDTH, HEIGHT = 800, 600
 GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
@@ -20,7 +22,7 @@ BLACK = (0, 0, 0)
 GREY = (200, 200, 200)
 DARKGREY = (50, 50, 50)
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
@@ -28,10 +30,10 @@ clock = pygame.time.Clock()
 MENU, GAME, PAUSE, GAME_OVER = "menu", "game", "pause", "game_over"
 state = MENU
 
-font = pygame.font.SysFont("Bahnschrift", 40)
+font = pygame.font.Font("Pixel_Emulator.otf", 40)
 small_font = pygame.font.SysFont("Arial", 24)
 
-# Shapes
+# Shapes and Colors
 SHAPES = {
     'I': [[1, 1, 1, 1]],
     'O': [[1, 1], [1, 1]],
@@ -41,7 +43,6 @@ SHAPES = {
     'J': [[1, 0, 0], [1, 1, 1]],
     'L': [[0, 0, 1], [1, 1, 1]],
 }
-
 SHAPE_COLORS = {
     'I': (0, 255, 255),
     'O': (255, 255, 0),
@@ -60,17 +61,57 @@ class Button:
         self.callback = callback
 
     def draw(self, surface):
-        pygame.draw.rect(surface, GREY, self.rect)
-        pygame.draw.rect(surface, DARKGREY, self.rect, 3)
-        txt_surface = font.render(self.text, True, BLACK)
-        txt_rect = txt_surface.get_rect(center=self.rect.center)
-        surface.blit(txt_surface, txt_rect)
+        draw_text_centered(
+            self.text,
+            size=40,
+            y=self.rect.centery,
+            bg_img="Border.png",
+            colour=WHITE
+        )
+
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
             self.callback()
 
-# Game logic
+# Transition
+transition_target = None
+transition_y = HEIGHT
+
+def start_transition(target_state):
+    global state, transition_target, transition_y
+    transition_target = target_state
+    transition_y = HEIGHT
+    state = TRANSITION
+
+def start_game():
+    reset_game()
+    start_transition(GAME)
+
+def return_to_menu():
+    start_transition(MENU)
+
+def resume_game():
+    start_transition(GAME)
+
+def get_menu_buttons(width, height):
+    return [
+        Button("Start Game", width // 2 - 100, height // 2 , 200, 50, start_game),
+        Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, start_game),
+    ]
+
+def get_pause_buttons(width, height):
+    return [
+        Button("Continue", width // 2 - 100, height // 2 , 200, 50, resume_game),
+        Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
+    ]
+
+
+
+##########################
+# GAME LOGIC & MECHANICS #
+##########################
+
 score = 0
 level = 1
 lines_cleared = 0
@@ -292,7 +333,12 @@ game_over_buttons = [
     Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
 ]
 
-# Drawing
+
+
+##########
+# DESIGN #
+##########
+
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
         for x in range(COLS):
@@ -302,6 +348,7 @@ def draw_board(offset_x, offset_y):
             if color:
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, BLACK, rect, 2)
+
 
 def draw_piece(piece, offset_x, offset_y, ghost=False):
     color = piece['color']
@@ -324,21 +371,96 @@ def get_ghost_piece(piece):
         ghost['y'] += 1
     return ghost
 
-# Game loop
+def draw_text_centered(text, size, y, bg_img="Border.png", colour=BLACK):
+    
+    #Text rendern und Position berechnen
+    fnt = pygame.font.Font("Pixel_Emulator.otf", 40)
+    txt_surface = fnt.render(text, True, colour)
+    txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
+
+    # Rahmenmaße definieren
+    padding = 20
+    box_rect = txt_rect.inflate(padding * 2, padding * 2)
+
+    # Mitte schwarz füllen
+    pygame.draw.rect(screen, BLACK, box_rect)
+
+    # Bild vorbereiten
+    border = pygame.image.load(bg_img).convert_alpha()
+
+    # Einzelteile aus dem Bild extrahieren
+    corner = 20  # Größe der Ecken
+    bw, bh = border.get_size()
+
+    # Teile ausschneiden
+    top_left     = border.subsurface((0, 0, corner, corner))
+    top_right    = border.subsurface((bw - corner, 0, corner, corner))
+    bottom_left  = border.subsurface((0, bh - corner, corner, corner))
+    bottom_right = border.subsurface((bw - corner, bh - corner, corner, corner))
+
+    top    = border.subsurface((corner, 0, bw - 2 * corner, corner))
+    bottom = border.subsurface((corner, bh - corner, bw - 2 * corner, corner))
+    left   = border.subsurface((0, corner, corner, bh - 2 * corner))
+    right  = border.subsurface((bw - corner, corner, corner, bh - 2 * corner))
+
+    # Rahmen zusammensetzen (an Textfeld anpassen)
+    # Ecken
+    screen.blit(top_left, (box_rect.left, box_rect.top))
+    screen.blit(top_right, (box_rect.right - corner, box_rect.top))
+    screen.blit(bottom_left, (box_rect.left, box_rect.bottom - corner))
+    screen.blit(bottom_right, (box_rect.right - corner, box_rect.bottom - corner))
+
+    # Kanten (skaliert)
+    screen.blit(pygame.transform.scale(top, (box_rect.width - 2 * corner, corner)), 
+                (box_rect.left + corner, box_rect.top))
+    screen.blit(pygame.transform.scale(bottom, (box_rect.width - 2 * corner, corner)), 
+                (box_rect.left + corner, box_rect.bottom - corner))
+    screen.blit(pygame.transform.scale(left, (corner, box_rect.height - 2 * corner)), 
+                (box_rect.left, box_rect.top + corner))
+    screen.blit(pygame.transform.scale(right, (corner, box_rect.height - 2 * corner)), 
+                (box_rect.right - corner, box_rect.top + corner))
+    
+    # Text darüber
+    screen.blit(txt_surface, txt_rect)
+
+
+
+# Hintergrundbild laden
+bg_tile = pygame.image.load("Background.png").convert()
+tile_width, tile_height = bg_tile.get_size()
+
+def draw_background():
+    for x in range(0, WIDTH, tile_width):
+        for y in range(0, HEIGHT, tile_height):
+            screen.blit(bg_tile, (x, y))
+
+
+#Passt Hintergrund und Platzierung von Buttons an Fenstergöße an
+def update_GUI():
+    global WIDTH, HEIGHT
+    WIDTH, HEIGHT = screen.get_size()
+    screen.fill(WHITE)
+    draw_background()
+
+
+#############
+# MAIN LOOP #
+#############
 reset_game()
 running = True
 last_fall = pygame.time.get_ticks()
 
 while running:
-    screen.fill(WHITE)
+    update_GUI()
     clock.tick(FPS)
     now = pygame.time.get_ticks()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
         if state == MENU:
-            for btn in menu_buttons:
+            for btn in get_menu_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
         elif state == GAME:
             if event.type == pygame.KEYDOWN:
@@ -358,7 +480,7 @@ while running:
                 elif event.key == pygame.K_f:
                     hold_current_piece()
         elif state == PAUSE:
-            for btn in pause_buttons:
+            for btn in get_pause_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
         elif state == GAME_OVER:
             for btn in game_over_buttons:
@@ -372,8 +494,8 @@ while running:
     offset_y = 0
 
     if state == MENU:
-        draw_text("TETRIS 2", WIDTH // 2 - 90, HEIGHT // 2 - 120, 60, (30, 30, 150))
-        for btn in menu_buttons:
+        draw_text_centered("TETRIS", 80, HEIGHT // 2 - 150, "Border.png", (30, 30, 150))
+        for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     elif state == GAME:
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
@@ -390,8 +512,8 @@ while running:
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
     elif state == PAUSE:
-        draw_text("PAUSED", WIDTH // 2 - 90, HEIGHT // 2 - 120, 60)
-        for btn in pause_buttons:
+        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 150, "Border.png", (30, 30, 150))
+        for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     elif state == GAME_OVER:
         draw_text("GAME OVER", WIDTH // 2 - 120, HEIGHT // 2 - 120, 60)
