@@ -6,16 +6,12 @@ pygame.init()
 #############
 # CONSTANTS #
 #############
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1000, 800
 GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
 
-NEXT_PIECE_X = WIDTH - 170
-NEXT_PIECE_Y = 50
-HOLD_PIECE_X = 40
-HOLD_PIECE_Y = 50
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -30,7 +26,7 @@ clock = pygame.time.Clock()
 MENU, GAME, PAUSE, GAME_OVER = "menu", "game", "pause", "game_over"
 state = MENU
 
-font = pygame.font.Font("Pixel_Emulator.otf", 40)
+font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
 small_font = pygame.font.SysFont("Arial", 24)
 
 # Shapes and Colors
@@ -53,6 +49,7 @@ SHAPE_COLORS = {
     'L': (255, 165, 0),
 }
 
+
 # Button class
 class Button:
     def __init__(self, text, x, y, w, h, callback):
@@ -63,10 +60,8 @@ class Button:
     def draw(self, surface):
         draw_text_centered(
             self.text,
-            size=40,
             y=self.rect.centery,
             bg_img="game_design\Border_2.png",
-            colour=WHITE
         )
 
 
@@ -74,26 +69,22 @@ class Button:
         if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
             self.callback()
 
-# Transition
-transition_target = None
-transition_y = HEIGHT
-
-def start_transition(target_state):
-    global state, transition_target, transition_y
-    transition_target = target_state
-    transition_y = HEIGHT
-    state = TRANSITION
 
 def start_game():
     reset_game()
-    start_transition(GAME)
+    global state 
+    state = GAME
 
 def return_to_menu():
-    start_transition(MENU)
+    global state 
+    state = MENU
 
 def resume_game():
-    start_transition(GAME)
+    global state 
+    state = GAME
 
+
+#Platzierung der Buttons korrigieren
 def get_menu_buttons(width, height):
     return [
         Button("Start Game", width // 2 - 100, height // 2 , 200, 50, start_game),
@@ -106,7 +97,11 @@ def get_pause_buttons(width, height):
         Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
     ]
 
-
+def get_game_over_buttons(width, height):
+    return [
+        Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
+        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+    ]
 
 ##########################
 # GAME LOGIC & MECHANICS #
@@ -266,13 +261,17 @@ def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, BLACK, rect, 1)
 
-def draw_next_pieces():
-    box_width = 160
-    box_height = 260
-    pygame.draw.rect(screen, BLACK, (NEXT_PIECE_X - 10, NEXT_PIECE_Y, box_width, box_height))
-    pygame.draw.rect(screen, GREY, (NEXT_PIECE_X - 10, NEXT_PIECE_Y, box_width, box_height), 4)
 
-    draw_text("Next:", NEXT_PIECE_X + 40, NEXT_PIECE_Y - 35, 22)
+# Next Pieces Vorschau
+def draw_next_pieces():
+    box_width, box_height = 160, 260
+    NEXT_PIECE_X = WIDTH // 2 + 200
+    NEXT_PIECE_Y = 100
+
+    pygame.draw.rect(screen, BLACK, (NEXT_PIECE_X, NEXT_PIECE_Y, box_width, box_height))
+    pygame.draw.rect(screen, GREY, (NEXT_PIECE_X, NEXT_PIECE_Y, box_width, box_height), 4)
+
+    draw_text_centered("Next:", NEXT_PIECE_Y-45, NEXT_PIECE_X+75)
     
     # Draw the next 3 pieces in the queue
     for i, piece in enumerate(next_queue[:3]):
@@ -284,8 +283,12 @@ def draw_next_pieces():
         draw_piece_in_box(piece, x_offset, y_offset, 0.75)
 
 
+# Hold Piece 
 def draw_hold_piece():
     box_width, box_height = 120, 120
+    HOLD_PIECE_X = WIDTH // 2 - 350
+    HOLD_PIECE_Y = 50
+
     pygame.draw.rect(screen, BLACK, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 0)
     pygame.draw.rect(screen, GREY, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 5)
     
@@ -297,19 +300,14 @@ def draw_hold_piece():
         y_offset = HOLD_PIECE_Y + (box_height - shape_height) // 2 - 10
         draw_piece_in_box(hold_piece, x_offset, y_offset, 1)
 
-    draw_text("Press F", HOLD_PIECE_X + 20, HOLD_PIECE_Y + 110, 18)
+    draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
 
-def draw_text(text, x, y, size=24, colour=BLACK):
-    fnt = pygame.font.SysFont("Arial", size)
-    txt_surface = fnt.render(text, True, colour)
-    screen.blit(txt_surface, (x, y))
-
+# Game states
 def game_over():
     global state
     state = GAME_OVER
 
-# Buttons
 def start_game():
     reset_game()
     global state
@@ -323,14 +321,18 @@ def resume_game():
     global state
     state = GAME
 
-menu_buttons = [Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)]
+
+# Buttons
+menu_buttons = [
+    Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)
+]
 pause_buttons = [
     Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
     Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
 ]
 game_over_buttons = [
     Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
 ]
 
 
@@ -371,12 +373,17 @@ def get_ghost_piece(piece):
         ghost['y'] += 1
     return ghost
 
-def draw_text_centered(text, size, y, bg_img="game_design\Border.png", colour=BLACK):
-    
-    #Text rendern und Position berechnen
-    fnt = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
+
+# Hauptfunktion für Text
+def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE):
+    # Text rendern und Position berechnen
+    fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
     txt_surface = fnt.render(text, True, colour)
-    txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
+
+    if x is None:
+        txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
+    else:
+        txt_rect = txt_surface.get_rect(center=(x, y))
 
     # Rahmenmaße definieren
     padding = 20
@@ -404,13 +411,11 @@ def draw_text_centered(text, size, y, bg_img="game_design\Border.png", colour=BL
     right  = border.subsurface((bw - corner, corner, corner, bh - 2 * corner))
 
     # Rahmen zusammensetzen (an Textfeld anpassen)
-    # Ecken
     screen.blit(top_left, (box_rect.left, box_rect.top))
     screen.blit(top_right, (box_rect.right - corner, box_rect.top))
     screen.blit(bottom_left, (box_rect.left, box_rect.bottom - corner))
     screen.blit(bottom_right, (box_rect.right - corner, box_rect.bottom - corner))
 
-    # Kanten (skaliert)
     screen.blit(pygame.transform.scale(top, (box_rect.width - 2 * corner, corner)), 
                 (box_rect.left + corner, box_rect.top))
     screen.blit(pygame.transform.scale(bottom, (box_rect.width - 2 * corner, corner)), 
@@ -419,9 +424,10 @@ def draw_text_centered(text, size, y, bg_img="game_design\Border.png", colour=BL
                 (box_rect.left, box_rect.top + corner))
     screen.blit(pygame.transform.scale(right, (corner, box_rect.height - 2 * corner)), 
                 (box_rect.right - corner, box_rect.top + corner))
-    
+
     # Text darüber
     screen.blit(txt_surface, txt_rect)
+
 
 
 
@@ -483,7 +489,7 @@ while running:
             for btn in get_pause_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
         elif state == GAME_OVER:
-            for btn in game_over_buttons:
+            for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
 
     if state == GAME and now - last_fall > fall_speed:
@@ -494,7 +500,7 @@ while running:
     offset_y = 0
 
     if state == MENU:
-        draw_text_centered("TETRIS", 80, HEIGHT // 2 - 150, "game_design\Border.png", (30, 30, 150))
+        draw_text_centered("TETRIS", 200, None, "game_design\Border.png", (30, 30, 150))
         for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     elif state == GAME:
@@ -502,9 +508,11 @@ while running:
         draw_board(offset_x, offset_y)
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
-        draw_text(f"Score: {score}", WIDTH - 180, HEIGHT - 120, 20)
-        draw_text(f"Level: {level}", WIDTH - 180, HEIGHT - 90, 20)
-        draw_text(f"Lines: {lines_cleared}", WIDTH - 180, HEIGHT - 60, 20)
+
+
+        draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300)
+        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
+        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
         draw_next_pieces()
         draw_hold_piece()
         for popup in score_popup:
@@ -512,12 +520,12 @@ while running:
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
     elif state == PAUSE:
-        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 150, "game_design\Border.png", (30, 30, 150))
+        draw_text_centered("PAUSED", 200, None, "game_design\Border.png", (30, 30, 150))
         for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     elif state == GAME_OVER:
-        draw_text("GAME OVER", WIDTH // 2 - 120, HEIGHT // 2 - 120, 60)
-        draw_text(f"Final Score: {score}", WIDTH // 2 - 100, HEIGHT // 2 - 40, 30)
+        draw_text_centered("GAME OVER", 200, None, "game_design\Border.png", (30, 30, 150))
+        draw_text_centered(f"Final Score: {score}", 300, None, "game_design\Border.png")
         for btn in game_over_buttons:
             btn.draw(screen)
 
