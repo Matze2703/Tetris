@@ -68,13 +68,13 @@ class Button:
 
 # Transitions
 transition_target = None
-transition_alpha = 0
+transition_y = HEIGHT
 
 # Game vars
 def start_transition(target_state):
-    global state, transition_target, transition_alpha
+    global state, transition_target, transition_y
     transition_target = target_state
-    transition_alpha = 0
+    transition_y = HEIGHT
     state = TRANSITION
 
 # State functions
@@ -286,11 +286,11 @@ while running:
             btn.draw(screen)
 
     elif state == TRANSITION:
-        transition_alpha += 10
-        if transition_alpha >= 255:
+        transition_y -= 30
+        if transition_y <= 0:
             state = transition_target
         else:
-            pygame.draw.rect(screen, (255, 255, 255, transition_alpha), screen.get_rect())
+            pygame.draw.rect(screen, WHITE, (0, HEIGHT - transition_y, WIDTH, transition_y))
 
     pygame.display.flip()
 
