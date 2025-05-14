@@ -26,7 +26,7 @@ clock = pygame.time.Clock()
 MENU, GAME, PAUSE, TRANSITION = "menu", "game", "pause", "transition"
 state = MENU
 
-font = pygame.font.Font("Pixel_Emulator.otf", 40)
+font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
 
 # Shapes and Colors
 SHAPES = {
@@ -60,7 +60,7 @@ class Button:
             self.text,
             size=40,
             y=self.rect.centery,
-            bg_img="Border.png",
+            bg_img="game_design\Border_2.png",
             colour=WHITE
         )
 
@@ -233,10 +233,10 @@ def draw_piece(piece, offset_x, offset_y, ghost=False):
                     pygame.draw.rect(screen, BLACK, rect, 1)
 
 
-def draw_text_centered(text, size, y, bg_img="Border.png", colour=BLACK):
+def draw_text_centered(text, size, y, bg_img="game_design\Border.png", colour=BLACK):
     
     #Text rendern und Position berechnen
-    fnt = pygame.font.Font("Pixel_Emulator.otf", 40)
+    fnt = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
     txt_surface = fnt.render(text, True, colour)
     txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
 
@@ -288,7 +288,7 @@ def draw_text_centered(text, size, y, bg_img="Border.png", colour=BLACK):
 
 
 # Hintergrundbild laden
-bg_tile = pygame.image.load("Background.png").convert()
+bg_tile = pygame.image.load("game_design\Background.png").convert()
 tile_width, tile_height = bg_tile.get_size()
 
 def draw_background():
@@ -352,7 +352,7 @@ while running:
     offset_y = 0
 
     if state == MENU:
-        draw_text_centered("TETRIS", 80, HEIGHT // 2 - 150, "Border.png", (30, 30, 150))
+        draw_text_centered("TETRIS", 80, HEIGHT // 2 - 150, "game_design\Border.png", (30, 30, 150))
         for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
@@ -368,7 +368,7 @@ while running:
         screen.blit(font.render(f"Lines: {lines_cleared}", True, BLACK), (info_x, 200))
 
     elif state == PAUSE:
-        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 150, "Border.png", (30, 30, 150))
+        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 150, "game_design\Border.png", (30, 30, 150))
         for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
