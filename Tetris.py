@@ -1,189 +1,298 @@
 import pygame
+import sys
 import random
 
-# Initialisierung
 pygame.init()
 
-# Konstanten
-SCREEN_WIDTH = 300
-SCREEN_HEIGHT = 600
+# Constants
+WIDTH, HEIGHT = 800, 600
+GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
-COLUMNS = SCREEN_WIDTH // BLOCK_SIZE
-ROWS = SCREEN_HEIGHT // BLOCK_SIZE
-
-# States
-MENU = "menu"
-PAUSE = "pause"
-GAME = "game"
-
-# Farben
-BLACK = (0, 0, 0)
-GRAY = (128, 128, 128)
-COLORS = [
-    (0, 255, 255),  # I
-    (0, 0, 255),    # J
-    (255, 165, 0),  # L
-    (255, 255, 0),  # O
-    (0, 255, 0),    # S
-    (128, 0, 128),  # T
-    (255, 0, 0)     # Z
-]
-
-# Formen der Tetriminos
-TETROMINOS = {
-    'I': [[1, 1, 1, 1]],
-    'J': [[1, 0, 0],
-          [1, 1, 1]],
-    'L': [[0, 0, 1],
-          [1, 1, 1]],
-    'O': [[1, 1],
-          [1, 1]],
-    'S': [[0, 1, 1],
-          [1, 1, 0]],
-    'T': [[0, 1, 0],
-          [1, 1, 1]],
-    'Z': [[1, 1, 0],
-          [0, 1, 1]]
-}
-
-# Bildschirm
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Tetris")
-
-clock = pygame.time.Clock()
+COLS, ROWS = 10, 20
 FPS = 60
 
-# Klasse für Tetriminos
-class Tetromino:
-    def __init__(self):
-        self.shape_name = random.choice(list(TETROMINOS))
-        self.shape = TETROMINOS[self.shape_name]
-        self.color = COLORS[list(TETROMINOS.keys()).index(self.shape_name)]
-        self.x = COLUMNS // 2 - len(self.shape[0]) // 2
-        self.y = 0
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREY = (200, 200, 200)
+DARKGREY = (50, 50, 50)
 
-    def rotate(self):
-        self.shape = [list(row) for row in zip(*self.shape[::-1])]
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Tetris")
+clock = pygame.time.Clock()
 
-    def get_coords(self):
-        coords = []
-        for dy, row in enumerate(self.shape):
-            for dx, val in enumerate(row):
-                if val:
-                    coords.append((self.x + dx, self.y + dy))
-        return coords
+# Game States
+MENU, GAME, PAUSE, TRANSITION = "menu", "game", "pause", "transition"
+state = MENU
 
-    
-    def collision(self, grid):
-        for x, y in self.get_coords():
-            if x < 0 or x >= COLUMNS or y >= ROWS:
-                return True
-            if (x, y) in grid:
-                return True
-        return False
+font = pygame.font.SysFont("Arial", 40)
 
+# Shapes
+SHAPES = {
+    'I': [[1, 1, 1, 1]],
+    'O': [[1, 1], [1, 1]],
+    'T': [[0, 1, 0], [1, 1, 1]],
+    'S': [[0, 1, 1], [1, 1, 0]],
+    'Z': [[1, 1, 0], [0, 1, 1]],
+    'J': [[1, 0, 0], [1, 1, 1]],
+    'L': [[0, 0, 1], [1, 1, 1]],
+}
 
-# Funktionen
-def create_grid(locked=None):
-    if locked is None:
-        locked = {}
-    grid = [[(0, 0, 0) for _ in range(COLUMNS)] for _ in range(ROWS)]
-    for y in range(ROWS):
-        for x in range(COLUMNS):
-            if (x, y) in locked:
-                grid[y][x] = locked[(x, y)]
-    return grid
+SHAPE_COLORS = {
+    'I': (0, 255, 255),
+    'O': (255, 255, 0),
+    'T': (128, 0, 128),
+    'S': (0, 255, 0),
+    'Z': (255, 0, 0),
+    'J': (0, 0, 255),
+    'L': (255, 165, 0),
+}
 
-def draw_grid(surface, grid):
-    for y in range(ROWS):
-        for x in range(COLUMNS):
-            pygame.draw.rect(surface, grid[y][x],
-                             (x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
-    for y in range(ROWS):
-        pygame.draw.line(surface, GRAY, (0, y * BLOCK_SIZE), (SCREEN_WIDTH, y * BLOCK_SIZE))
-    for x in range(COLUMNS):
-        pygame.draw.line(surface, GRAY, (x * BLOCK_SIZE, 0), (x * BLOCK_SIZE, SCREEN_HEIGHT))
+# Button class
+class Button:
+    def __init__(self, text, x, y, w, h, callback):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.text = text
+        self.callback = callback
 
-def clear_rows(grid, locked):
+    def draw(self, surface):
+        pygame.draw.rect(surface, GREY, self.rect)
+        pygame.draw.rect(surface, DARKGREY, self.rect, 3)
+        txt_surface = font.render(self.text, True, BLACK)
+        txt_rect = txt_surface.get_rect(center=self.rect.center)
+        surface.blit(txt_surface, txt_rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.callback()
+
+# Transitions
+transition_target = None
+transition_alpha = 0
+
+# Game vars
+def start_transition(target_state):
+    global state, transition_target, transition_alpha
+    transition_target = target_state
+    transition_alpha = 0
+    state = TRANSITION
+
+# State functions
+def start_game():
+    reset_game()
+    start_transition(GAME)
+
+def return_to_menu():
+    start_transition(MENU)
+
+def resume_game():
+    start_transition(GAME)
+
+menu_buttons = [Button("Start Game", WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50, start_game)]
+pause_buttons = [
+    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
+]
+
+# Game logic
+score = 0
+level = 1
+lines_cleared = 0
+
+def create_piece():
+    shape = random.choice(list(SHAPES.keys()))
+    return {
+        'shape': shape,
+        'matrix': SHAPES[shape],
+        'x': COLS // 2 - len(SHAPES[shape][0]) // 2,
+        'y': 0,
+        'color': SHAPE_COLORS[shape]
+    }
+
+def rotate(matrix):
+    return [list(row)[::-1] for row in zip(*matrix)]
+
+def valid_position(piece, dx=0, dy=0, rotated=None):
+    shape = rotated if rotated else piece['matrix']
+    for y, row in enumerate(shape):
+        for x, cell in enumerate(row):
+            if cell:
+                new_x = piece['x'] + x + dx
+                new_y = piece['y'] + y + dy
+                if new_x < 0 or new_x >= COLS or new_y >= ROWS:
+                    return False
+                if new_y >= 0 and board[new_y][new_x]:
+                    return False
+    return True
+
+def merge_piece(piece):
+    for y, row in enumerate(piece['matrix']):
+        for x, cell in enumerate(row):
+            if cell:
+                board[piece['y'] + y][piece['x'] + x] = piece['color']
+
+def clear_lines():
+    global board, score, lines_cleared, level, fall_speed
+    new_board = []
     cleared = 0
-    for y in range(ROWS - 1, -1, -1):
-        if (0, 0, 0) not in grid[y]:
+    for row in board:
+        if all(row):
             cleared += 1
-            for x in range(COLUMNS):
-                try:
-                    del locked[(x, y)]
-                except:
-                    continue
-            for yy in range(y - 1, -1, -1):
-                for x in range(COLUMNS):
-                    if (x, yy) in locked:
-                        locked[(x, yy + 1)] = locked.pop((x, yy))
-    return cleared
+        else:
+            new_board.append(row)
+    for _ in range(cleared):
+        new_board.insert(0, [0 for _ in range(COLS)])
+    board = new_board
 
-# Spiel-Loop
-def main():
-    locked_positions = {0,0,0,0,0,0,0,0,0,0}
-    grid = create_grid(locked_positions)
+    if cleared:
+        score_add = [0, 40, 100, 300, 1200][cleared] * level
+        score += score_add
+        lines_cleared += cleared
+        level = 1 + lines_cleared // 10
+        fall_speed = max(100, 500 - (level - 1) * 30)
 
-    current_piece = Tetromino()
+def move_piece(dx, dy):
+    if valid_position(current_piece, dx, dy):
+        current_piece['x'] += dx
+        current_piece['y'] += dy
+        return True
+    return False
+
+def drop_piece():
+    global current_piece
+    if not move_piece(0, 1):
+        merge_piece(current_piece)
+        clear_lines()
+        current_piece = create_piece()
+        if not valid_position(current_piece):
+            return_to_menu()
+
+def hard_drop():
+    while move_piece(0, 1):
+        pass
+    drop_piece()
+
+def reset_game():
+    global board, current_piece, fall_time, fall_speed, score, level, lines_cleared
+    board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
+    current_piece = create_piece()
     fall_time = 0
-    fall_speed = 0.5
-    change_piece = False
+    fall_speed = 500  # ms
+    score = 0
+    level = 1
+    lines_cleared = 0
 
-    run = True
-    while run:
-        grid = create_grid(locked_positions)
-        fall_time += clock.get_rawtime()
-        clock.tick(FPS)
+def get_ghost_piece(piece):
+    ghost = dict(piece)
+    while valid_position(ghost, dy=1):
+        ghost['y'] += 1
+    return ghost
 
-        if fall_time / 1000 >= fall_speed:
-            current_piece.y += 1
-            if current_piece.collision(grid):
-                current_piece.y -= 1
-                change_piece = True
-            fall_time = 0
+# Drawing
 
-        # Events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                pygame.quit()
-                return
+def draw_board(offset_x, offset_y):
+    for y in range(ROWS):
+        for x in range(COLS):
+            rect = pygame.Rect(offset_x + x * BLOCK_SIZE, offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+            pygame.draw.rect(screen, DARKGREY, rect, 1)
+            color = board[y][x]
+            if color:
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, BLACK, rect, 2)
 
+def draw_piece(piece, offset_x, offset_y, ghost=False):
+    color = piece['color']
+    alpha = 100 if ghost else 255
+    for y, row in enumerate(piece['matrix']):
+        for x, cell in enumerate(row):
+            if cell:
+                px = piece['x'] + x
+                py = piece['y'] + y
+                if py >= 0:
+                    rect = pygame.Rect(offset_x + px * BLOCK_SIZE, offset_y + py * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+                    s = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
+                    s.fill((*color, alpha))
+                    screen.blit(s, rect.topleft)
+                    pygame.draw.rect(screen, BLACK, rect, 1)
+
+def draw_text_centered(text, size, y, colour=BLACK):
+    fnt = pygame.font.SysFont("Arial", size)
+    txt_surface = fnt.render(text, True, colour)
+    txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
+    screen.blit(txt_surface, txt_rect)
+
+# Game loop
+reset_game()
+running = True
+last_fall = pygame.time.get_ticks()
+
+while running:
+    screen.fill(WHITE)
+    clock.tick(FPS)
+    now = pygame.time.get_ticks()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if state == MENU:
+            for btn in menu_buttons:
+                btn.handle_event(event)
+        elif state == GAME:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    current_piece.x -= 1
-                    if current_piece.collision(grid):
-                        current_piece.x += 1
-                elif event.key == pygame.K_RIGHT:
-                    current_piece.x += 1
-                    if current_piece.collision(grid):
-                        current_piece.x -= 1
-                elif event.key == pygame.K_DOWN:
-                    current_piece.y += 1
-                    if current_piece.collision(grid):
-                        current_piece.y -= 1
-                elif event.key == pygame.K_UP:
-                    current_piece.rotate()
-                    if current_piece.collision(grid):
-                        current_piece.rotate()
-                        current_piece.rotate()
-                        current_piece.rotate()
+                if event.key == pygame.K_ESCAPE:
+                    start_transition(PAUSE)
+                elif event.key == pygame.K_a:
+                    move_piece(-1, 0)
+                elif event.key == pygame.K_d:
+                    move_piece(1, 0)
+                elif event.key == pygame.K_s:
+                    drop_piece()
+                elif event.key == pygame.K_w:
+                    rotated = rotate(current_piece['matrix'])
+                    if valid_position(current_piece, rotated=rotated):
+                        current_piece['matrix'] = rotated
+                elif event.key == pygame.K_SPACE:
+                    hard_drop()
+        elif state == PAUSE:
+            for btn in pause_buttons:
+                btn.handle_event(event)
 
-        for x, y in current_piece.get_coords():
-            if y >= 0:
-                grid[y][x] = current_piece.color
+    if state == GAME and now - last_fall > fall_speed:
+        drop_piece()
+        last_fall = now
 
-        if change_piece:
-            for x, y in current_piece.get_coords():
-                locked_positions[(x, y)] = current_piece.color
-            current_piece = Tetromino()
-            change_piece = False
-            clear_rows(grid, locked_positions)
+    offset_x = WIDTH // 2 - GAME_WIDTH // 2
+    offset_y = 0
 
-        # Zeichnen
-        screen.fill(BLACK)
-        draw_grid(screen, grid)
-        pygame.display.update()
+    if state == MENU:
+        draw_text_centered("★ TETRIS ★", 80, HEIGHT // 2 - 120, (30, 30, 150))
+        for btn in menu_buttons:
+            btn.draw(screen)
 
-main()
+    elif state == GAME:
+        pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
+        draw_board(offset_x, offset_y)
+        ghost_piece = get_ghost_piece(current_piece)
+        draw_piece(ghost_piece, offset_x, offset_y, ghost=True)
+        draw_piece(current_piece, offset_x, offset_y)
+        info_x = offset_x + GAME_WIDTH + 40
+        screen.blit(font.render(f"Score: {score}", True, BLACK), (info_x, 100))
+        screen.blit(font.render(f"Level: {level}", True, BLACK), (info_x, 150))
+        screen.blit(font.render(f"Lines: {lines_cleared}", True, BLACK), (info_x, 200))
+
+    elif state == PAUSE:
+        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 120)
+        for btn in pause_buttons:
+            btn.draw(screen)
+
+    elif state == TRANSITION:
+        transition_alpha += 10
+        if transition_alpha >= 255:
+            state = transition_target
+        else:
+            pygame.draw.rect(screen, (255, 255, 255, transition_alpha), screen.get_rect())
+
+    pygame.display.flip()
+
+pygame.quit()
+sys.exit()
