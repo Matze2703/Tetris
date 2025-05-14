@@ -1,6 +1,5 @@
-import pygame
-import sys
-import random
+import pygame, sys, random, time
+
 
 pygame.init()
 
@@ -10,6 +9,11 @@ GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
+
+NEXT_PIECE_X = WIDTH - 170
+NEXT_PIECE_Y = 50
+HOLD_PIECE_X = 40
+HOLD_PIECE_Y = 50
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -21,10 +25,11 @@ pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
 # Game States
-MENU, GAME, PAUSE, TRANSITION = "menu", "game", "pause", "transition"
+MENU, GAME, PAUSE, GAME_OVER = "menu", "game", "pause", "game_over"
 state = MENU
 
-font = pygame.font.SysFont("Arial", 40)
+font = pygame.font.SysFont("Bahnschrift", 40)
+small_font = pygame.font.SysFont("Arial", 24)
 
 # Shapes
 SHAPES = {
@@ -62,42 +67,33 @@ class Button:
         surface.blit(txt_surface, txt_rect)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.rect.collidepoint(event.pos):
-                self.callback()
-
-# Transitions
-transition_target = None
-transition_y = HEIGHT
-
-# Game vars
-def start_transition(target_state):
-    global state, transition_target, transition_y
-    transition_target = target_state
-    transition_y = HEIGHT
-    state = TRANSITION
-
-# State functions
-def start_game():
-    reset_game()
-    start_transition(GAME)
-
-def return_to_menu():
-    start_transition(MENU)
-
-def resume_game():
-    start_transition(GAME)
-
-menu_buttons = [Button("Start Game", WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50, start_game)]
-pause_buttons = [
-    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
-]
+        if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+            self.callback()
 
 # Game logic
 score = 0
 level = 1
 lines_cleared = 0
+score_popup = []
+hold_piece = None
+next_queue = []
+used_hold = False
+
+class ScorePopup:
+    def __init__(self, text, x, y):
+        self.text = text
+        self.x = x
+        self.y = y
+        self.timer = 60
+
+    def draw(self):
+        txt_surface = small_font.render(self.text, True, BLACK)
+        screen.blit(txt_surface, (self.x, self.y))
+        self.y -= 1
+        self.timer -= 1
+
+    def is_alive(self):
+        return self.timer > 0
 
 def create_piece():
     shape = random.choice(list(SHAPES.keys()))
@@ -111,6 +107,13 @@ def create_piece():
 
 def rotate(matrix):
     return [list(row)[::-1] for row in zip(*matrix)]
+
+def wall_kick(piece, rotated):
+    for dx in [0, -1, 1, -2, 2]:
+        if valid_position(piece, dx=dx, rotated=rotated):
+            piece['x'] += dx
+            piece['matrix'] = rotated
+            return
 
 def valid_position(piece, dx=0, dy=0, rotated=None):
     shape = rotated if rotated else piece['matrix']
@@ -143,12 +146,14 @@ def clear_lines():
     for _ in range(cleared):
         new_board.insert(0, [0 for _ in range(COLS)])
     board = new_board
-
     if cleared:
-        score_add = [0, 40, 100, 300, 1200][cleared] * level
+        base_scores = [0, 100, 300, 500, 800]
+        score_add = base_scores[cleared] * level
+        score_popup.append(ScorePopup(f"{cleared}x Line clear", 30, 250))
+        score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
         score += score_add
         lines_cleared += cleared
-        level = 1 + lines_cleared // 10
+        level = 1 + lines_cleared // 5
         fall_speed = max(100, 500 - (level - 1) * 30)
 
 def move_piece(dx, dy):
@@ -159,37 +164,135 @@ def move_piece(dx, dy):
     return False
 
 def drop_piece():
-    global current_piece
+    global current_piece, used_hold
     if not move_piece(0, 1):
         merge_piece(current_piece)
         clear_lines()
-        current_piece = create_piece()
+        current_piece = next_queue.pop(0)
+        next_queue.append(create_piece())
+        used_hold = False
         if not valid_position(current_piece):
-            return_to_menu()
+            time.sleep(1)
+            game_over()
 
 def hard_drop():
+    global score
+    drops = 0
     while move_piece(0, 1):
-        pass
+        drops += 1
+    score += drops * 2
+    score_popup.append(ScorePopup(f"Hard Drop", 30, 320))
+    score_popup.append(ScorePopup(f"+{drops * 2} pts", 30, 350))
     drop_piece()
 
 def reset_game():
-    global board, current_piece, fall_time, fall_speed, score, level, lines_cleared
+    global board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
-    current_piece = create_piece()
+    next_queue = [create_piece() for _ in range(3)]
+    current_piece = next_queue.pop(0)
+    next_queue.append(create_piece())
     fall_time = 0
-    fall_speed = 500  # ms
+    fall_speed = 500
     score = 0
     level = 1
     lines_cleared = 0
+    score_popup = []
+    hold_piece = None
+    used_hold = False
 
-def get_ghost_piece(piece):
-    ghost = dict(piece)
-    while valid_position(ghost, dy=1):
-        ghost['y'] += 1
-    return ghost
+def hold_current_piece():
+    global hold_piece, current_piece, next_queue, used_hold
+    if used_hold:
+        return
+    used_hold = True
+    if hold_piece is None:
+        hold_piece = current_piece
+        current_piece = next_queue.pop(0)
+        next_queue.append(create_piece())
+    else:
+        hold_piece, current_piece = current_piece, hold_piece
+    current_piece['x'] = COLS // 2 - len(current_piece['matrix'][0]) // 2
+    current_piece['y'] = 0
+
+def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
+    matrix = piece['matrix']
+    color = piece['color']
+    for y, row in enumerate(matrix):
+        for x, cell in enumerate(row):
+            if cell:
+                rect = pygame.Rect(offset_x + x * BLOCK_SIZE * scale, offset_y + y * BLOCK_SIZE * scale,
+                                   BLOCK_SIZE * scale, BLOCK_SIZE * scale)
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, BLACK, rect, 1)
+
+def draw_next_pieces():
+    box_width = 160
+    box_height = 260
+    pygame.draw.rect(screen, BLACK, (NEXT_PIECE_X - 10, NEXT_PIECE_Y, box_width, box_height))
+    pygame.draw.rect(screen, GREY, (NEXT_PIECE_X - 10, NEXT_PIECE_Y, box_width, box_height), 4)
+
+    draw_text("Next:", NEXT_PIECE_X + 40, NEXT_PIECE_Y - 35, 22)
+    
+    # Draw the next 3 pieces in the queue
+    for i, piece in enumerate(next_queue[:3]):
+        matrix = piece['matrix']
+        piece_width = len(matrix[0]) * BLOCK_SIZE * 0.75
+        piece_height = len(matrix) * BLOCK_SIZE * 0.75
+        x_offset = NEXT_PIECE_X + (box_width - piece_width) // 2 - 15
+        y_offset = NEXT_PIECE_Y + i * 80 + (60 - piece_height) // 2 + 20
+        draw_piece_in_box(piece, x_offset, y_offset, 0.75)
+
+
+def draw_hold_piece():
+    box_width, box_height = 120, 120
+    pygame.draw.rect(screen, BLACK, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 0)
+    pygame.draw.rect(screen, GREY, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 5)
+    
+    if hold_piece:
+        matrix = hold_piece['matrix']
+        shape_width = len(matrix[0]) * BLOCK_SIZE
+        shape_height = len(matrix) * BLOCK_SIZE
+        x_offset = HOLD_PIECE_X + (box_width - shape_width) // 2 - 10
+        y_offset = HOLD_PIECE_Y + (box_height - shape_height) // 2 - 10
+        draw_piece_in_box(hold_piece, x_offset, y_offset, 1)
+
+    draw_text("Press F", HOLD_PIECE_X + 20, HOLD_PIECE_Y + 110, 18)
+
+
+def draw_text(text, x, y, size=24, colour=BLACK):
+    fnt = pygame.font.SysFont("Arial", size)
+    txt_surface = fnt.render(text, True, colour)
+    screen.blit(txt_surface, (x, y))
+
+def game_over():
+    global state
+    state = GAME_OVER
+
+# Buttons
+def start_game():
+    reset_game()
+    global state
+    state = GAME
+
+def return_to_menu():
+    global state
+    state = MENU
+
+def resume_game():
+    global state
+    state = GAME
+
+menu_buttons = [Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)]
+pause_buttons = [
+    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
+]
+game_over_buttons = [
+    Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+]
 
 # Drawing
-
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
         for x in range(COLS):
@@ -215,11 +318,11 @@ def draw_piece(piece, offset_x, offset_y, ghost=False):
                     screen.blit(s, rect.topleft)
                     pygame.draw.rect(screen, BLACK, rect, 1)
 
-def draw_text_centered(text, size, y, colour=BLACK):
-    fnt = pygame.font.SysFont("Arial", size)
-    txt_surface = fnt.render(text, True, colour)
-    txt_rect = txt_surface.get_rect(center=(WIDTH // 2, y))
-    screen.blit(txt_surface, txt_rect)
+def get_ghost_piece(piece):
+    ghost = dict(piece)
+    while valid_position(ghost, dy=1):
+        ghost['y'] += 1
+    return ghost
 
 # Game loop
 reset_game()
@@ -240,7 +343,7 @@ while running:
         elif state == GAME:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    start_transition(PAUSE)
+                    state = PAUSE
                 elif event.key == pygame.K_a:
                     move_piece(-1, 0)
                 elif event.key == pygame.K_d:
@@ -249,12 +352,16 @@ while running:
                     drop_piece()
                 elif event.key == pygame.K_w:
                     rotated = rotate(current_piece['matrix'])
-                    if valid_position(current_piece, rotated=rotated):
-                        current_piece['matrix'] = rotated
+                    wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
                     hard_drop()
+                elif event.key == pygame.K_f:
+                    hold_current_piece()
         elif state == PAUSE:
             for btn in pause_buttons:
+                btn.handle_event(event)
+        elif state == GAME_OVER:
+            for btn in game_over_buttons:
                 btn.handle_event(event)
 
     if state == GAME and now - last_fall > fall_speed:
@@ -265,36 +372,34 @@ while running:
     offset_y = 0
 
     if state == MENU:
-        draw_text_centered("★ TETRIS ★", 80, HEIGHT // 2 - 120, (30, 30, 150))
+        draw_text("TETRIS 2", WIDTH // 2 - 90, HEIGHT // 2 - 120, 60, (30, 30, 150))
         for btn in menu_buttons:
             btn.draw(screen)
-
     elif state == GAME:
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
         draw_board(offset_x, offset_y)
-        ghost_piece = get_ghost_piece(current_piece)
-        draw_piece(ghost_piece, offset_x, offset_y, ghost=True)
+        draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
-        info_x = offset_x + GAME_WIDTH + 40
-        screen.blit(font.render(f"Score: {score}", True, BLACK), (info_x, 100))
-        screen.blit(font.render(f"Level: {level}", True, BLACK), (info_x, 150))
-        screen.blit(font.render(f"Lines: {lines_cleared}", True, BLACK), (info_x, 200))
-
+        draw_text(f"Score: {score}", WIDTH - 180, HEIGHT - 120, 20)
+        draw_text(f"Level: {level}", WIDTH - 180, HEIGHT - 90, 20)
+        draw_text(f"Lines: {lines_cleared}", WIDTH - 180, HEIGHT - 60, 20)
+        draw_next_pieces()
+        draw_hold_piece()
+        for popup in score_popup:
+            if popup.is_alive():
+                popup.draw()
+        score_popup[:] = [p for p in score_popup if p.is_alive()]
     elif state == PAUSE:
-        draw_text_centered("PAUSED", 60, HEIGHT // 2 - 120)
+        draw_text("PAUSED", WIDTH // 2 - 90, HEIGHT // 2 - 120, 60)
         for btn in pause_buttons:
             btn.draw(screen)
-
-    elif state == TRANSITION:
-        transition_y -= 30
-        if transition_y <= 0:
-            state = transition_target
-        else:
-            pygame.draw.rect(screen, WHITE, (0, HEIGHT - transition_y, WIDTH, transition_y))
+    elif state == GAME_OVER:
+        draw_text("GAME OVER", WIDTH // 2 - 120, HEIGHT // 2 - 120, 60)
+        draw_text(f"Final Score: {score}", WIDTH // 2 - 100, HEIGHT // 2 - 40, 30)
+        for btn in game_over_buttons:
+            btn.draw(screen)
 
     pygame.display.flip()
 
 pygame.quit()
 sys.exit()
-
-#yes
