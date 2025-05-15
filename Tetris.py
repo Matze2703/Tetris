@@ -1,15 +1,25 @@
-import pygame, sys, random, time
+"""
+    To do:
 
-
-"""To do:
-        olkek:
+        olek:
             - Shape spawn algorithmus bearbeiten
             - Shape move während gameplay funktion
             - Potentiell besseres rotate mit Q und E
-            - Transition funktion mit Aimationen untersuchen
+            - Transition Funktion mit Animationen untersuchen
             - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
 
+
+        Irgendwann später:
+            - Audio:
+                - Sounds für UI (Kurzes 8-bit bop für buttons)
+                - Vielleicht sounds für shape placement und line clear
+                    - Speziall sound für "Tetris" (4x Line clear)
+                - Musik (es ist tetris)
+            
+
+
 """
+import pygame, sys, random, time
 
 pygame.init()
 
@@ -97,7 +107,7 @@ def resume_game():
 #Platzierung der Buttons korrigieren
 def get_menu_buttons(width, height):
     return [
-        Button("Start Game", width // 2 - 100, height // 2 , 200, 50, start_game),
+        Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
         Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, start_game),
     ]
 
