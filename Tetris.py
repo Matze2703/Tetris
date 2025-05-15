@@ -1,6 +1,16 @@
 import pygame, sys, random, time
 
 
+"""To do:
+        olkek:
+            - Shape spawn algorithmus bearbeiten
+            - Shape move während gameplay funktion
+            - Potentiell besseres rotate mit Q und E
+            - Transition funktion mit Aimationen untersuchen
+            - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
+
+"""
+
 pygame.init()
 
 #############
@@ -189,7 +199,7 @@ def clear_lines():
         score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
         score += score_add
         lines_cleared += cleared
-        level = 1 + lines_cleared // 5
+        level = 1 + lines_cleared // 1
         fall_speed = max(100, 500 - (level - 1) * 30)
 
 def move_piece(dx, dy):
