@@ -1,6 +1,21 @@
+"""
+
+To do:
+        olkek:
+            - Shape spawn algorithmus bearbeiten
+            - Shape move während gameplay funktion
+            - Potentiell besseres rotate mit Q und E
+            - Transition funktion mit Aimationen untersuchen
+            - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
+
+        Matze:
+            - Sounds für UI (Kurzes 8-bit bop für buttons)
+            - Vielleicht sounds für shape placement und line clear
+            - Speziall sound für "Tetris" (4x Line clear)
+
+"""
+
 import pygame, sys, random, time
-
-
 pygame.init()
 
 #############
@@ -13,6 +28,13 @@ COLS, ROWS = 10, 20
 FPS = 60
 
 
+music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
+selected_track = 1
+music_value = 0.5
+pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
+pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
+pygame.mixer.music.set_volume(0.5)
+
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GREY = (200, 200, 200)
@@ -23,10 +45,10 @@ pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
 # Game States
-MENU, GAME, PAUSE, GAME_OVER = "menu", "game", "pause", "game_over"
+MENU, GAME, PAUSE, GAME_OVER, OPTIONS = "menu", "game", "pause", "game_over", "options"
 state = MENU
 
-font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
+font = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
 small_font = pygame.font.SysFont("Arial", 24)
 
 # Shapes and Colors
@@ -50,6 +72,10 @@ SHAPE_COLORS = {
 }
 
 
+###########
+# KLASSEN #
+###########
+
 # Button class
 class Button:
     def __init__(self, text, x, y, w, h, callback):
@@ -61,59 +87,14 @@ class Button:
         draw_text_centered(
             self.text,
             y=self.rect.centery,
-            bg_img="game_design\Border_2.png",
+            x=self.rect.centerx,
+            bg_img="game_design\\Border_2.png",
         )
-
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
             self.callback()
 
-
-def start_game():
-    reset_game()
-    global state 
-    state = GAME
-
-def return_to_menu():
-    global state 
-    state = MENU
-
-def resume_game():
-    global state 
-    state = GAME
-
-
-#Platzierung der Buttons korrigieren
-def get_menu_buttons(width, height):
-    return [
-        Button("Start Game", width // 2 - 100, height // 2 , 200, 50, start_game),
-        Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, start_game),
-    ]
-
-def get_pause_buttons(width, height):
-    return [
-        Button("Continue", width // 2 - 100, height // 2 , 200, 50, resume_game),
-        Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
-    ]
-
-def get_game_over_buttons(width, height):
-    return [
-        Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
-    ]
-
-##########################
-# GAME LOGIC & MECHANICS #
-##########################
-
-score = 0
-level = 1
-lines_cleared = 0
-score_popup = []
-hold_piece = None
-next_queue = []
-used_hold = False
 
 class ScorePopup:
     def __init__(self, text, x, y):
@@ -130,6 +111,19 @@ class ScorePopup:
 
     def is_alive(self):
         return self.timer > 0
+
+
+##########################
+# GAME LOGIC & MECHANICS #
+##########################
+
+score = 0
+level = 1
+lines_cleared = 0
+score_popup = []
+hold_piece = None
+next_queue = []
+used_hold = False
 
 def create_piece():
     shape = random.choice(list(SHAPES.keys()))
@@ -189,7 +183,7 @@ def clear_lines():
         score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
         score += score_add
         lines_cleared += cleared
-        level = 1 + lines_cleared // 5
+        level = 1 + lines_cleared // 10  # Adjusted to increase level every 10 lines
         fall_speed = max(100, 500 - (level - 1) * 30)
 
 def move_piece(dx, dy):
@@ -227,7 +221,7 @@ def reset_game():
     next_queue = [create_piece() for _ in range(3)]
     current_piece = next_queue.pop(0)
     next_queue.append(create_piece())
-    fall_time = 0
+    fall_time = pygame.time.get_ticks()  # Initialize to current time
     fall_speed = 500
     score = 0
     level = 1
@@ -262,7 +256,6 @@ def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
                 pygame.draw.rect(screen, BLACK, rect, 1)
 
 
-# Next Pieces Vorschau
 def draw_next_pieces():
     box_width, box_height = 160, 260
     NEXT_PIECE_X = WIDTH // 2 + 200
@@ -273,7 +266,6 @@ def draw_next_pieces():
 
     draw_text_centered("Next:", NEXT_PIECE_Y-45, NEXT_PIECE_X+75)
     
-    # Draw the next 3 pieces in the queue
     for i, piece in enumerate(next_queue[:3]):
         matrix = piece['matrix']
         piece_width = len(matrix[0]) * BLOCK_SIZE * 0.75
@@ -283,7 +275,6 @@ def draw_next_pieces():
         draw_piece_in_box(piece, x_offset, y_offset, 0.75)
 
 
-# Hold Piece 
 def draw_hold_piece():
     box_width, box_height = 120, 120
     HOLD_PIECE_X = WIDTH // 2 - 350
@@ -303,7 +294,6 @@ def draw_hold_piece():
     draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
 
-# Game states
 def game_over():
     global state
     state = GAME_OVER
@@ -317,29 +307,59 @@ def return_to_menu():
     global state
     state = MENU
 
+def go_to_options():
+    global state
+    state = OPTIONS
+
 def resume_game():
     global state
     state = GAME
 
+def change_music_volume(delta):
+    global music_value
+    music_value = min(max(round((music_value + delta) * 20) / 20, 0.0), 1.0)
+    pygame.mixer.music.set_volume(music_value)
 
-# Buttons
-menu_buttons = [
-    Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)
-]
-pause_buttons = [
-    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
-]
-game_over_buttons = [
-    Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
-]
-
-
+def change_music_track(delta):
+    global selected_track
+    if delta == -1 and selected_track != 1:
+        selected_track += delta
+    if delta == +1 and selected_track != (len(music_tracks)):
+        selected_track += delta
+    pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
+    pygame.mixer.music.play(-1, 0.0)
 
 ##########
 # DESIGN #
 ##########
+
+def get_menu_buttons(width, height):
+    return [
+        Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
+        Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, go_to_options),
+    ]
+
+def get_options_UI(width, height):
+    return [
+        Button("<", width // 2 -250, height // 2 -25, 80, 50, lambda: change_music_volume(-0.05)),
+        Button(">", width // 2 +170, height // 2 -25, 80, 50, lambda: change_music_volume(+0.05)),
+        Button("<", width // 2 -250, height // 2 -125, 80, 50, lambda: change_music_track(-1)),
+        Button(">", width // 2 +170, height // 2 -125, 80, 50, lambda: change_music_track(+1)),
+        Button("Back", width // 2 -300, height // 2 +100, 150, 80, return_to_menu),
+    ]
+
+def get_pause_buttons(width, height):
+    return [
+        Button("Continue", width // 2 - 100, height // 2 , 200, 50, resume_game),
+        Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
+    ]
+
+def get_game_over_buttons(width, height):
+    return [
+        Button("Try Again", width // 2 - 100, height // 2 + 60, 200, 50, start_game),
+        Button("Main Menu", width // 2 - 100, height // 2 + 130, 200, 50, return_to_menu),
+    ]
+
 
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
@@ -374,9 +394,7 @@ def get_ghost_piece(piece):
     return ghost
 
 
-# Hauptfunktion für Text
 def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE):
-    # Text rendern und Position berechnen
     fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
     txt_surface = fnt.render(text, True, colour)
 
@@ -385,21 +403,16 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
     else:
         txt_rect = txt_surface.get_rect(center=(x, y))
 
-    # Rahmenmaße definieren
     padding = 20
     box_rect = txt_rect.inflate(padding * 2, padding * 2)
 
-    # Mitte schwarz füllen
     pygame.draw.rect(screen, BLACK, box_rect)
 
-    # Bild vorbereiten
     border = pygame.image.load(bg_img).convert_alpha()
 
-    # Einzelteile aus dem Bild extrahieren
-    corner = 20  # Größe der Ecken
+    corner = 20
     bw, bh = border.get_size()
 
-    # Teile ausschneiden
     top_left     = border.subsurface((0, 0, corner, corner))
     top_right    = border.subsurface((bw - corner, 0, corner, corner))
     bottom_left  = border.subsurface((0, bh - corner, corner, corner))
@@ -410,7 +423,6 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
     left   = border.subsurface((0, corner, corner, bh - 2 * corner))
     right  = border.subsurface((bw - corner, corner, corner, bh - 2 * corner))
 
-    # Rahmen zusammensetzen (an Textfeld anpassen)
     screen.blit(top_left, (box_rect.left, box_rect.top))
     screen.blit(top_right, (box_rect.right - corner, box_rect.top))
     screen.blit(bottom_left, (box_rect.left, box_rect.bottom - corner))
@@ -425,14 +437,10 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
     screen.blit(pygame.transform.scale(right, (corner, box_rect.height - 2 * corner)), 
                 (box_rect.right - corner, box_rect.top + corner))
 
-    # Text darüber
     screen.blit(txt_surface, txt_rect)
 
 
-
-
-# Hintergrundbild laden
-bg_tile = pygame.image.load("game_design\Background.png").convert()
+bg_tile = pygame.image.load("game_design\\Background.png").convert()
 tile_width, tile_height = bg_tile.get_size()
 
 def draw_background():
@@ -441,7 +449,6 @@ def draw_background():
             screen.blit(bg_tile, (x, y))
 
 
-#Passt Hintergrund und Platzierung von Buttons an Fenstergöße an
 def update_GUI():
     global WIDTH, HEIGHT
     WIDTH, HEIGHT = screen.get_size()
@@ -454,7 +461,6 @@ def update_GUI():
 #############
 reset_game()
 running = True
-last_fall = pygame.time.get_ticks()
 
 while running:
     update_GUI()
@@ -468,6 +474,11 @@ while running:
         if state == MENU:
             for btn in get_menu_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
+        
+        elif state == OPTIONS:
+            for btn in get_options_UI(WIDTH, HEIGHT):
+                btn.handle_event(event)
+        
         elif state == GAME:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -479,36 +490,45 @@ while running:
                 elif event.key == pygame.K_s:
                     drop_piece()
                 elif event.key == pygame.K_w:
-                    rotated = rotate(current_piece['matrix'])
-                    wall_kick(current_piece, rotated)
+                    if current_piece['shape'] != 'O':  # Prevent 'O' from rotating
+                        rotated = rotate(current_piece['matrix'])
+                        wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
                     hard_drop()
                 elif event.key == pygame.K_f:
                     hold_current_piece()
+        
         elif state == PAUSE:
             for btn in get_pause_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
+        
         elif state == GAME_OVER:
             for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
 
-    if state == GAME and now - last_fall > fall_speed:
+    if state == GAME and now - fall_time > fall_speed:
         drop_piece()
-        last_fall = now
+        fall_time = now
 
     offset_x = WIDTH // 2 - GAME_WIDTH // 2
     offset_y = 0
 
     if state == MENU:
-        draw_text_centered("TETRIS", 200, None, "game_design\Border.png", (30, 30, 150))
+        draw_text_centered("TETRIS", 200, None, "game_design\\Border.png", (30, 30, 150))
         for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
+    
+    elif state == OPTIONS:
+        draw_text_centered(f"TRACK: {selected_track}", HEIGHT // 2 -100)
+        draw_text_centered(f"MUSIK: {round(music_value*100)}%", HEIGHT // 2)
+        for btn in get_options_UI(WIDTH, HEIGHT):
+            btn.draw(screen)
+
     elif state == GAME:
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
         draw_board(offset_x, offset_y)
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
-
 
         draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300)
         draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
@@ -519,14 +539,16 @@ while running:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
+    
     elif state == PAUSE:
-        draw_text_centered("PAUSED", 200, None, "game_design\Border.png", (30, 30, 150))
+        draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
         for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
+    
     elif state == GAME_OVER:
-        draw_text_centered("GAME OVER", 200, None, "game_design\Border.png", (30, 30, 150))
-        draw_text_centered(f"Final Score: {score}", 300, None, "game_design\Border.png")
-        for btn in game_over_buttons:
+        draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (30, 30, 150))
+        draw_text_centered(f"Final Score: {score}", 300, None, "game_design\\Border.png")
+        for btn in get_game_over_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
     pygame.display.flip()
