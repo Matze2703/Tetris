@@ -27,13 +27,22 @@ BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
 
-
+# Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
 selected_track = 1
-music_value = 0.5
+music_volume = 0.5
 pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
 pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
 pygame.mixer.music.set_volume(0.5)
+
+#SFX
+sfx_volume = 0.5
+def play_sound(soundfile):
+    sound = pygame.mixer.Sound(f"sound_design\\{soundfile}")
+    sound.set_volume(sfx_volume)
+    sound.play()
+
+
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -361,9 +370,9 @@ def resume_game():
     state = GAME
 
 def change_music_volume(delta):
-    global music_value
-    music_value = min(max(round((music_value + delta) * 20) / 20, 0.0), 1.0)
-    pygame.mixer.music.set_volume(music_value)
+    global music_volume
+    music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
+    pygame.mixer.music.set_volume(music_volume)
 
 def change_music_track(delta):
     global selected_track
@@ -373,6 +382,10 @@ def change_music_track(delta):
         selected_track += delta
     pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
     pygame.mixer.music.play(-1, 0.0)
+
+
+
+
 
 ##########
 # DESIGN #
@@ -529,16 +542,19 @@ while running:
                 if event.key == pygame.K_ESCAPE:
                     state = PAUSE
                 elif event.key == pygame.K_a:
+                    play_sound("move.mp3")
                     move_piece(-1, 0)
                 elif event.key == pygame.K_d:
+                    play_sound("move.mp3")
                     move_piece(1, 0)
                 elif event.key == pygame.K_s:
                     drop_piece()
                 elif event.key == pygame.K_w:
-                    if current_piece['shape'] != 'O':  # Prevent 'O' from rotating
-                        rotated = rotate(current_piece['matrix'])
-                        wall_kick(current_piece, rotated)
+                    play_sound("rotate.mp3")
+                    rotated = rotate(current_piece['matrix'])
+                    wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
+                    play_sound("drop.mp3")
                     hard_drop()
                 elif event.key == pygame.K_f:
                     hold_current_piece()
@@ -565,7 +581,7 @@ while running:
     
     elif state == OPTIONS:
         draw_text_centered(f"TRACK: {selected_track}", HEIGHT // 2 -100)
-        draw_text_centered(f"MUSIK: {round(music_value*100)}%", HEIGHT // 2)
+        draw_text_centered(f"MUSIK: {round(music_volume*100)}%", HEIGHT // 2)
         for btn in get_options_UI(WIDTH, HEIGHT):
             btn.draw(screen)
 
