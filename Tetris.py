@@ -96,6 +96,51 @@ class Button:
             self.callback()
 
 
+def start_game():
+    reset_game()
+    global state 
+    state = GAME
+
+def return_to_menu():
+    global state 
+    state = MENU
+
+def resume_game():
+    global state 
+    state = GAME
+
+
+#Platzierung der Buttons korrigieren
+def get_menu_buttons(width, height):
+    return [
+        Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
+        Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, start_game),
+    ]
+
+def get_pause_buttons(width, height):
+    return [
+        Button("Continue", width // 2 - 100, height // 2 , 200, 50, resume_game),
+        Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
+    ]
+
+def get_game_over_buttons(width, height):
+    return [
+        Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
+        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+    ]
+
+##########################
+# GAME LOGIC & MECHANICS #
+##########################
+
+score = 0
+level = 1
+lines_cleared = 0
+score_popup = []
+hold_piece = None
+next_queue = []
+used_hold = False
+
 class ScorePopup:
     def __init__(self, text, x, y):
         self.text = text
