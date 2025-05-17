@@ -34,6 +34,7 @@ if not os.path.isfile("config.txt"):
         print("config erstellt")
         datei.write("1\n")
         datei.write("0.5")
+        datei.write("0.5")
 
 #File für Scores
 if not os.path.isfile("Scores.txt"):
@@ -47,6 +48,7 @@ player_name = ''
 with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
+    sfx_volume = float(datei.readline().strip())
 
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
 pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
@@ -54,7 +56,6 @@ pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
 pygame.mixer.music.set_volume(music_volume)
 
 #SFX
-sfx_volume = 0.5
 def play_sound(soundfile):
     sound = pygame.mixer.Sound(f"sound_design\\{soundfile}")
     sound.set_volume(sfx_volume)
@@ -64,7 +65,8 @@ def play_sound(soundfile):
 def update_config():
     with open("config.txt", "w") as datei:
         datei.write(f"{selected_track}\n")
-        datei.write(f"{music_volume}")
+        datei.write(f"{music_volume}\n")
+        datei.write(f"{sfx_volume}")
 
 
 WHITE = (255, 255, 255)
@@ -164,7 +166,6 @@ def show_leaderboard():
     
     # Sortieren
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
-    print(sorted_leaderboard)
     
     # Ausgeben
     line_height = 1
@@ -196,11 +197,13 @@ def get_leaderboard_UI(width, height):
 
 def get_options_UI(width, height):
     return [
-        Button("<", width // 2 -250, height // 2 -25, 80, 50, lambda: change_music_volume(-0.05)),
-        Button(">", width // 2 +170, height // 2 -25, 80, 50, lambda: change_music_volume(+0.05)),
         Button("<", width // 2 -250, height // 2 -125, 80, 50, lambda: change_music_track(-1)),
         Button(">", width // 2 +170, height // 2 -125, 80, 50, lambda: change_music_track(+1)),
-        Button("Back", width // 2 -300, height // 2 +100, 150, 80, return_to_menu),
+        Button("<", width // 2 -250, height // 2 -25, 80, 50, lambda: change_volume("music_volume", -0.05)),
+        Button(">", width // 2 +170, height // 2 -25, 80, 50, lambda: change_volume("music_volume", +0.05)),
+        Button("<", width // 2 -250, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", -0.05)),
+        Button(">", width // 2 +170, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", +0.05)),
+        Button("Back", width // 2 -300, height // 2 +300, 150, 80, return_to_menu),
     ]
 
 def get_pause_buttons(width, height):
@@ -218,7 +221,7 @@ def get_game_over_buttons(width, height):
 
 
 ##########################
-# "GAME" LOGIC & MECHANICS #
+# GAME LOGIC & MECHANICS #
 ##########################
 
 score = 0
@@ -245,18 +248,6 @@ class ScorePopup:
     def is_alive(self):
         return self.timer > 0
 
-
-##########################
-# "GAME" LOGIC & MECHANICS #
-##########################
-
-score = 0
-level = 1
-lines_cleared = 0
-score_popup = []
-hold_piece = None
-next_queue = []
-used_hold = False
 
 def create_piece():
     shape = random.choice(list(SHAPES.keys()))
@@ -405,10 +396,14 @@ def resume_game():
     global state
     state = "GAME"
 
-def change_music_volume(delta):
-    global music_volume
-    music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
-    pygame.mixer.music.set_volume(music_volume)
+def change_volume(variable,delta):
+    if variable == "music_volume":
+        global music_volume
+        music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
+        pygame.mixer.music.set_volume(music_volume)
+    elif variable == "sfx_volume":
+        global sfx_volume
+        sfx_volume = min(max(round((sfx_volume + delta) * 20) / 20, 0.0), 1.0)
     update_config()
 
 def change_music_track(delta):
@@ -600,15 +595,15 @@ while running:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     state = "PAUSE"
-                elif event.key == pygame.K_a:
+                if event.key in (pygame.K_a, pygame.K_LEFT):
                     play_sound("move.mp3")
                     move_piece(-1, 0)
-                elif event.key == pygame.K_d:
+                if event.key in (pygame.K_d, pygame.K_RIGHT):
                     play_sound("move.mp3")
                     move_piece(1, 0)
-                elif event.key == pygame.K_s:
+                if event.key in (pygame.K_s, pygame.K_DOWN):
                     drop_piece()
-                elif event.key == pygame.K_w:
+                if event.key in (pygame.K_w, pygame.K_UP):
                     play_sound("rotate.mp3")
                     rotated = rotate(current_piece['matrix'])
                     wall_kick(current_piece, rotated)
@@ -624,15 +619,16 @@ while running:
         
         elif state == "ENTER_NAME":
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN: 
+                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     with open("Scores.txt","a") as datei:       # Score speichern
                         datei.write(f"{player_name.upper()}: {score}\n")
+                    player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
                     player_name = player_name[:-1]  # Letztes Zeichen löschen
                 else:
                     player_name += event.unicode  # Zeichen hinzufügen
-                    
+
         elif state == "GAME_OVER":
             for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
@@ -652,6 +648,7 @@ while running:
     elif state == "OPTIONS":
         draw_text_centered(f"TRACK: {selected_track}", HEIGHT // 2 -100)
         draw_text_centered(f"MUSIK: {round(music_volume*100)}%", HEIGHT // 2)
+        draw_text_centered(f"SFX: {round(sfx_volume*100)}%", HEIGHT // 2 +100)
         for btn in get_options_UI(WIDTH, HEIGHT):
             btn.draw(screen)
 
@@ -666,7 +663,7 @@ while running:
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
 
-        draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300)
+        draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
         draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
         draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
         draw_next_pieces()
