@@ -9,7 +9,7 @@ To do:
             - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
 
         Matze:
-            - Sounds für UI (Kurzes 8-bit bop für buttons)
+            Fertig soweit
 
 """
 
@@ -78,6 +78,7 @@ clock = pygame.time.Clock()
 
 # Set Game state
 state = "MENU"
+previous_state = ''
 
 font = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
 small_font = pygame.font.SysFont("Arial", 24)
@@ -133,13 +134,45 @@ def start_game():
     global state 
     state = "GAME"
 
+def go_to_options():
+    global state
+    state = "OPTIONS"
+
 def return_to_menu():
-    global state 
+    global state
     state = "MENU"
 
 def resume_game():
     global state 
     state = "GAME"
+
+def go_back():
+    global state, previous_state
+    state = previous_state
+
+def game_over():
+    global state
+    state = "ENTER_NAME"
+
+def change_volume(variable,delta):
+    if variable == "music_volume":
+        global music_volume
+        music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
+        pygame.mixer.music.set_volume(music_volume)
+    elif variable == "sfx_volume":
+        global sfx_volume
+        sfx_volume = min(max(round((sfx_volume + delta) * 20) / 20, 0.0), 1.0)
+    update_config()
+
+def change_music_track(delta):
+    global selected_track
+    if delta == -1 and selected_track != 1:
+        selected_track += delta
+    if delta == +1 and selected_track != (len(music_tracks)):
+        selected_track += delta
+    pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
+    pygame.mixer.music.play(-1, 0.0)
+    update_config()
 
 def show_leaderboard():
     global state
@@ -191,7 +224,7 @@ def get_menu_buttons(width, height):
 
 def get_leaderboard_UI(width, height):
     return [
-        Button("Back", 0, height // 2 + 300, 150, 80, return_to_menu),
+        Button("Back", 0, height // 2 + 300, 150, 80, go_back),
     ]
 
 def get_options_UI(width, height):
@@ -202,13 +235,14 @@ def get_options_UI(width, height):
         Button(">", width // 2 +170, height // 2 -25, 80, 50, lambda: change_volume("music_volume", +0.05)),
         Button("<", width // 2 -250, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", -0.05)),
         Button(">", width // 2 +170, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", +0.05)),
-        Button("Back", width // 2 -300, height // 2 +300, 150, 80, return_to_menu),
+        Button("Back", width // 2 -300, height // 2 +300, 150, 80, go_back),
     ]
 
 def get_pause_buttons(width, height):
     return [
-        Button("Continue", width // 2 - 100, height // 2 , 200, 50, resume_game),
-        Button("Main Menu", width // 2 - 100, height // 2 + 100, 200, 50, return_to_menu),
+        Button("Continue", width // 2 - 100, height // 2 , 200, 80, resume_game),
+        Button("Options", width // 2 - 100, height // 2 +100, 200, 80, go_to_options),
+        Button("Main Menu", width // 2 - 100, height // 2 +200, 200, 80, return_to_menu),
     ]
 
 def get_game_over_buttons(width, height):
@@ -379,55 +413,6 @@ def hold_current_piece():
 
 
 
-######################
-# FUNKTIONEN BUTTONS #
-######################
-
-def game_over():
-    global state
-    state = "ENTER_NAME"
-
-def start_game():
-    reset_game()
-    global state
-    state = "GAME"
-
-def return_to_menu():
-    global state
-    state = "MENU"
-
-def go_to_options():
-    global state
-    state = "OPTIONS"
-
-def resume_game():
-    global state
-    state = "GAME"
-
-def change_volume(variable,delta):
-    if variable == "music_volume":
-        global music_volume
-        music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
-        pygame.mixer.music.set_volume(music_volume)
-    elif variable == "sfx_volume":
-        global sfx_volume
-        sfx_volume = min(max(round((sfx_volume + delta) * 20) / 20, 0.0), 1.0)
-    update_config()
-
-def change_music_track(delta):
-    global selected_track
-    if delta == -1 and selected_track != 1:
-        selected_track += delta
-    if delta == +1 and selected_track != (len(music_tracks)):
-        selected_track += delta
-    pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
-    pygame.mixer.music.play(-1, 0.0)
-    update_config()
-
-
-
-
-
 ##########
 # DESIGN #
 ##########
@@ -590,6 +575,7 @@ while running:
         if state == "MENU":
             for btn in get_menu_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
+            previous_state = "MENU"
         
         elif state == "OPTIONS":
             for btn in get_options_UI(WIDTH, HEIGHT):
@@ -598,11 +584,13 @@ while running:
         elif state == "LEADERBOARD":
             for btn in get_leaderboard_UI(WIDTH, HEIGHT):
                 btn.handle_event(event)
+                previous_state = "MENU"
             
         elif state == "GAME":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     state = "PAUSE"
+                    previous_state = "PAUSE"
                 if event.key in (pygame.K_a, pygame.K_LEFT):
                     play_sound("move.mp3")
                     move_piece(-1, 0)
