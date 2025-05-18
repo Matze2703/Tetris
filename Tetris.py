@@ -10,8 +10,6 @@ To do:
 
         Matze:
             - Sounds für UI (Kurzes 8-bit bop für buttons)
-            - sounds für line clear
-            - Speziall sound für "Tetris" (4x Line clear)
 
 """
 
@@ -126,6 +124,7 @@ class Button:
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+            play_sound("button_bop.mp3")
             self.callback()
 
 
@@ -297,6 +296,12 @@ def clear_lines():
             cleared += 1
         else:
             new_board.append(row)
+    #line clear Sounds
+    if cleared in (1,2,3):
+        play_sound("line_clear.mp3")
+    elif cleared >= 4:
+        play_sound("4x_line_clear.mp3")
+
     for _ in range(cleared):
         new_board.insert(0, [0 for _ in range(COLS)])
     board = new_board
@@ -307,7 +312,10 @@ def clear_lines():
         score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
         score += score_add
         lines_cleared += cleared
-        level = 1 + lines_cleared // 10  # Adjusted to increase level every 10 lines
+        # Bissl kompliziertere Logik für level um Sound einzubauen
+        if (lines_cleared / level) == 10:
+            level += 1
+            play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
 
 def move_piece(dx, dy):
