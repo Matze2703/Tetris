@@ -2,24 +2,20 @@
     To do:
 
         olek:
-            - Shape spawn algorithmus bearbeiten
-            - Shape move während gameplay funktion
-            - Potentiell besseres rotate mit Q und E
+            - Shape spawn algorithmus bearbeiten -- ok?
+            - Shape move während gameplay funktion -- ok?
+            - Potentiell besseres rotate mit Q und E 
             - Transition Funktion mit Animationen untersuchen
             - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
+    Fehler:
 
-
-        Irgendwann später:
-            - Audio:
-                - Sounds für UI (Kurzes 8-bit bop für buttons)
-                - Vielleicht sounds für shape placement und line clear
-                    - Speziall sound für "Tetris" (4x Line clear)
-                - Musik (es ist tetris)
+        - Im Game Over "Try again" und "Main Menu" funktionieren nicht richtig während das Fenster maximalisiert ist.
+            Die Hitbox um die buttons zu clicken ist nach unten verschoben
             
 
 
 """
-import pygame, sys, random, time
+import pygame, sys, random
 
 pygame.init()
 
@@ -47,7 +43,7 @@ MENU, GAME, PAUSE, GAME_OVER = "menu", "game", "pause", "game_over"
 state = MENU
 
 font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
-small_font = pygame.font.SysFont("Arial", 24)
+small_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 24)
 
 # Shapes and Colors
 SHAPES = {
@@ -134,6 +130,11 @@ score_popup = []
 hold_piece = None
 next_queue = []
 used_hold = False
+previous_shape = None
+shape_bag = []
+
+def delay(milsec):
+    return pygame.time.delay(milsec)
 
 class ScorePopup:
     def __init__(self, text, x, y):
@@ -143,7 +144,7 @@ class ScorePopup:
         self.timer = 60
 
     def draw(self):
-        txt_surface = small_font.render(self.text, True, BLACK)
+        txt_surface = small_font.render(self.text, True, WHITE)
         screen.blit(txt_surface, (self.x, self.y))
         self.y -= 1
         self.timer -= 1
@@ -152,13 +153,24 @@ class ScorePopup:
         return self.timer > 0
 
 def create_piece():
-    shape = random.choice(list(SHAPES.keys()))
+    #classic tetris bag system
+    global shape_bag, previous_shape 
+    if shape_bag == []:
+        shape_bag = list(SHAPES.keys())
+        random.shuffle(shape_bag)
+    shape = shape_bag.pop()
+    while shape == previous_shape:
+        random.shuffle(shape_bag)
+        shape = shape_bag.pop()
+    previous_shape = shape
+
     return {
         'shape': shape,
         'matrix': SHAPES[shape],
         'x': COLS // 2 - len(SHAPES[shape][0]) // 2,
         'y': 0,
         'color': SHAPE_COLORS[shape]
+
     }
 
 def rotate(matrix):
@@ -184,6 +196,9 @@ def valid_position(piece, dx=0, dy=0, rotated=None):
                     return False
     return True
 
+
+
+
 def merge_piece(piece):
     for y, row in enumerate(piece['matrix']):
         for x, cell in enumerate(row):
@@ -203,8 +218,8 @@ def clear_lines():
         new_board.insert(0, [0 for _ in range(COLS)])
     board = new_board
     if cleared:
-        base_scores = [0, 100, 300, 500, 800]
-        score_add = base_scores[cleared] * level
+        base_scores = [0, 100, 300, 500, 1000]
+        score_add = int(round(base_scores[cleared] *0.5*  level,0))
         score_popup.append(ScorePopup(f"{cleared}x Line clear", 30, 250))
         score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
         score += score_add
@@ -212,34 +227,47 @@ def clear_lines():
         level = 1 + lines_cleared // 1
         fall_speed = max(100, 500 - (level - 1) * 30)
 
+# --- Lock delay variables ---
+lock_delay = 300  # milliseconds
+lock_timer = None
+lock_pending = False
+
 def move_piece(dx, dy):
+    global lock_timer, lock_pending
     if valid_position(current_piece, dx, dy):
         current_piece['x'] += dx
         current_piece['y'] += dy
+        # If piece is moved during lock delay, reset timer
+        if lock_pending:
+            lock_timer = pygame.time.get_ticks()
         return True
     return False
 
 def drop_piece():
-    global current_piece, used_hold
+    global current_piece, used_hold, lock_timer, lock_pending
     if not move_piece(0, 1):
-        merge_piece(current_piece)
-        clear_lines()
-        current_piece = next_queue.pop(0)
-        next_queue.append(create_piece())
-        used_hold = False
-        if not valid_position(current_piece):
-            time.sleep(1)
-            game_over()
+        if not lock_pending:
+            lock_timer = pygame.time.get_ticks()
+            lock_pending = True
 
 def hard_drop():
-    global score
+    global score, lock_pending, used_hold, current_piece
     drops = 0
     while move_piece(0, 1):
         drops += 1
     score += drops * 2
     score_popup.append(ScorePopup(f"Hard Drop", 30, 320))
     score_popup.append(ScorePopup(f"+{drops * 2} pts", 30, 350))
-    drop_piece()
+    # Immediately lock and merge the piece, skip lock delay
+    merge_piece(current_piece)
+    clear_lines()
+    current_piece = next_queue.pop(0)
+    next_queue.append(create_piece())
+    used_hold = False
+    lock_pending = False
+    if not valid_position(current_piece):
+        pygame.time.delay(500)
+        game_over()
 
 def reset_game():
     global board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
@@ -298,7 +326,7 @@ def draw_next_pieces():
         matrix = piece['matrix']
         piece_width = len(matrix[0]) * BLOCK_SIZE * 0.75
         piece_height = len(matrix) * BLOCK_SIZE * 0.75
-        x_offset = NEXT_PIECE_X + (box_width - piece_width) // 2 - 15
+        x_offset = NEXT_PIECE_X + (box_width - piece_width) // 2 - 0
         y_offset = NEXT_PIECE_Y + i * 80 + (60 - piece_height) // 2 + 20
         draw_piece_in_box(piece, x_offset, y_offset, 0.75)
 
@@ -397,7 +425,10 @@ def get_ghost_piece(piece):
 # Hauptfunktion für Text
 def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE):
     # Text rendern und Position berechnen
+
     fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
+    #fnt = pygame.font.SysFont("Pixel_Emulator", 40)         #<-- Temp fix für lag verursacht wegen google drive auf meinem pc (ich hasse google drive)
+
     txt_surface = fnt.render(text, True, colour)
 
     if x is None:
@@ -476,6 +507,20 @@ reset_game()
 running = True
 last_fall = pygame.time.get_ticks()
 
+def is_piece_fully_in_air(piece):
+    for y, row in enumerate(piece['matrix']):
+        for x, cell in enumerate(row):
+            if cell:
+                board_x = piece['x'] + x
+                board_y = piece['y'] + y
+                # If at the bottom row
+                if board_y + 1 >= ROWS:
+                    return False
+                # If block below is occupied
+                if board[board_y + 1][board_x]:
+                    return False
+    return True
+
 while running:
     update_GUI()
     clock.tick(FPS)
@@ -493,9 +538,11 @@ while running:
                 if event.key == pygame.K_ESCAPE:
                     state = PAUSE
                 elif event.key == pygame.K_a:
-                    move_piece(-1, 0)
+                    if move_piece(-1, 0) and lock_pending:
+                        lock_timer = pygame.time.get_ticks()
                 elif event.key == pygame.K_d:
-                    move_piece(1, 0)
+                    if move_piece(1, 0) and lock_pending:
+                        lock_timer = pygame.time.get_ticks()
                 elif event.key == pygame.K_s:
                     drop_piece()
                 elif event.key == pygame.K_w:
@@ -503,18 +550,39 @@ while running:
                     wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
                     hard_drop()
+                    
                 elif event.key == pygame.K_f:
                     hold_current_piece()
         elif state == PAUSE:
             for btn in get_pause_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    state = GAME    
         elif state == GAME_OVER:
             for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
 
-    if state == GAME and now - last_fall > fall_speed:
-        drop_piece()
-        last_fall = now
+    if state == GAME:
+        if lock_pending:
+            if pygame.time.get_ticks() - lock_timer >= lock_delay:
+                # Only merge if the piece cannot move down
+                if not valid_position(current_piece, dy=1):
+                    merge_piece(current_piece)
+                    clear_lines()
+                    current_piece = next_queue.pop(0)
+                    next_queue.append(create_piece())
+                    used_hold = False
+                    lock_pending = False
+                    if not valid_position(current_piece):
+                        pygame.time.delay(500)
+                        game_over()
+                else:
+                    # Reset lock timer if still able to fall
+                    lock_pending = False   
+        elif now - last_fall > fall_speed:
+            drop_piece()
+            last_fall = now
 
     offset_x = WIDTH // 2 - GAME_WIDTH // 2
     offset_y = 0
