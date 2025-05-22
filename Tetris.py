@@ -324,6 +324,7 @@ def create_piece():
         'x': COLS // 2 - len(SHAPES[shape][0]) // 2,
         'y': 0,
         'color': SHAPE_COLORS[shape]
+
     }
 
 def rotate(matrix):
@@ -349,6 +350,9 @@ def valid_position(piece, dx=0, dy=0, rotated=None):
                     return False
     return True
 
+
+
+
 def merge_piece(piece):
     for y, row in enumerate(piece['matrix']):
         for x, cell in enumerate(row):
@@ -357,6 +361,7 @@ def merge_piece(piece):
 
 def clear_lines():
     global board, score, lines_cleared, level, fall_speed
+    old_level = level
     new_board = []
     cleared = 0
     for row in board:
@@ -762,6 +767,7 @@ while running:
         show_leaderboard()
 
     elif state == "GAME":
+        #offset_y = HEIGHT // 2 - GAME_HEIGHT // 2
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
         draw_board(offset_x, offset_y)
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
@@ -776,6 +782,7 @@ while running:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
+        #offset_y= 0
     
     elif state == "PAUSE":
         draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
