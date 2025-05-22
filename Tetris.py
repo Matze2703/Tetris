@@ -2,13 +2,17 @@
 
 To do:
         olkek:
-            - Shape spawn algorithmus bearbeiten
-            - Shape move während gameplay funktion
-            - Potentiell besseres rotate mit Q und E
-            - Transition funktion mit Aimationen untersuchen
             - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
+                --> https://tetris.wiki/Scoring
+
+
+            - Potentiell besseres rotate mit Q und E
+            - Transition funktion mit Animationen untersuchen
+            
     Fehler:
-            - Level wird nicht richtig geupdated
+            - Level wird nicht richtig geupdated (Temp fix)
+
+            - ist des mein kack laptop oder stuttert das spiel ab und zu?
        
 
 
@@ -271,6 +275,7 @@ used_hold = False
 previous_shape = None
 shape_bag = []
 
+
 def delay(milsec):
     return pygame.time.delay(milsec)
 
@@ -279,10 +284,18 @@ class ScorePopup:
         self.text = text
         self.x = x
         self.y = y
-        self.timer = 60
+        self.timer = 45
 
     def draw(self):
+        # Draw black outline
         txt_surface = small_font.render(self.text, True, WHITE)
+        outline_color = BLACK
+        for dx in [-2, 0, 2]:
+            for dy in [-2, 0, 2]:
+                if dx != 0 or dy != 0:
+                    outline_surface = small_font.render(self.text, True, outline_color)
+                    screen.blit(outline_surface, (self.x + dx, self.y + dy))
+        # Draw main text
         screen.blit(txt_surface, (self.x, self.y))
         self.y -= 1
         self.timer -= 1
@@ -364,20 +377,22 @@ def clear_lines():
         new_board.insert(0, [0 for _ in range(COLS)])
     board = new_board
     if cleared:
-        base_scores = [0, 100, 300, 500, 1000]
-        score_add = int(round(base_scores[cleared] *0.5*  level,0))
-        score_popup.append(ScorePopup(f"{cleared}x Line clear", 30, 250))
-        score_popup.append(ScorePopup(f"+{score_add} pts", 30, 280))
+        base_scores = [0, 100, 300, 500, 800]
+        score_add = int(round(base_scores[cleared] *  level,0))
+        popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
+        popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 200
+        score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
+        score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
         score += score_add
         lines_cleared += cleared
         # Bissl kompliziertere Logik für level um Sound einzubauen
-        level = 1 + lines_cleared // 1
+        level = 1 + lines_cleared // 5  #<-- je x zeilen wird level erhöcht
         if old_level != level:
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
 
 # --- Lock delay variables ---
-lock_delay = 300  # milliseconds
+lock_delay = 300 - level*10 # milliseconds
 lock_timer = None
 lock_pending = False
 
@@ -405,8 +420,10 @@ def hard_drop():
     while move_piece(0, 1):
         drops += 1
     score += drops * 2
-    score_popup.append(ScorePopup(f"Hard Drop", 30, 320))
-    score_popup.append(ScorePopup(f"+{drops * 2} pts", 30, 350))
+    popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
+    popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 280
+    score_popup.append(ScorePopup(f"Hard Drop", popup_x, popup_y))
+    score_popup.append(ScorePopup(f"+{drops * 2} pts", popup_x, popup_y +30))
     # Immediately lock and merge the piece, skip lock delay
     merge_piece(current_piece)
     clear_lines()
@@ -616,8 +633,8 @@ def get_ghost_piece(piece):
         ghost['y'] += 1
     return ghost
 
-def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE):
-    fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", 40)
+def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE, font_size = 40):
+    fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", font_size)
     #fnt = pygame.font.SysFont("Pixel_Emulator", 40)         #<-- Temp fix für lag verursacht wegen google drive auf meinem pc (ich hasse google drive)
 
     txt_surface = fnt.render(text, True, colour)
@@ -814,10 +831,10 @@ while running:
         fall_time = now
 
     offset_x = WIDTH // 2 - GAME_WIDTH // 2
-    offset_y = 0
+    offset_y = HEIGHT // 2 - GAME_HEIGHT // 2
 
     if state == "MENU":
-        draw_text_centered("TETRIS", 200, None, "game_design\\Border.png", (30, 30, 150))
+        draw_text_centered("TETRIS", 200, None, "game_design\\Border.png", (30, 30, 150), font_size = 80)
         for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     
@@ -834,6 +851,7 @@ while running:
         show_leaderboard()
 
     elif state == "GAME":
+        #offset_y = HEIGHT // 2 - GAME_HEIGHT // 2
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
         draw_board(offset_x, offset_y)
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
@@ -848,6 +866,7 @@ while running:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
+        #offset_y= 0
     
     elif state == "PAUSE":
         draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
