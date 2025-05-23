@@ -4,26 +4,33 @@ To do:
         olkek:
             - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
                 --> https://tetris.wiki/Scoring
+                        -> hard drop ok
+                        -> soft drop ok
+                        -> line clear ok
+                        -> fuck t spins
+                        -> perfect clear?
+                        -> combo?
 
+            - Potentiell besseres rotate mit Q und E 
+                -> erfordert eine änderung von grundstruktur der shapes (lohnt sich nit)
+                -> Hätte was gemacht, schau es dir mal an
 
-            - Potentiell besseres rotate mit Q und E
-            - ist eingebaut, bitte überprüfen
+            - Transition funktion mit Animationen untersuchen (wie a coole powerpoint)
 
             - Transition funktion mit Animationen untersuchen
-
-            - infinite lock_delay wenn kurz vor lock rotate getriggert wird
 
             - Brauchst du das auskommentierte in Zeile 685-687 noch?
                 
         Matze:
             - Level wird jetzt richtig geupdatet
 
-            - ist des mein kack laptop oder stuttert das spiel ab und zu?
-            - Ich sag Laptop
-
-            
-       
-
+    
+    Irgendwann später:
+            - buttons und menu overhaul mit mouse hover und so
+    
+    
+    Fehler:
+            - lock delay + rotato = infinito tormento
 
 """
 
@@ -83,6 +90,7 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GREY = (200, 200, 200)
 DARKGREY = (50, 50, 50)
+YELLOW = (242, 255, 0)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Tetris")
@@ -94,25 +102,26 @@ previous_state = ''
 
 font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
 small_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 24)
+big_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 64)
 
 # Shapes and Colors
 SHAPES = {
     'I': [[1, 1, 1, 1]],
     'O': [[1, 1], [1, 1]],
-    'T': [[0, 1, 0], [1, 1, 1]],
-    'S': [[0, 1, 1], [1, 1, 0]],
-    'Z': [[1, 1, 0], [0, 1, 1]],
-    'J': [[1, 0, 0], [1, 1, 1]],
-    'L': [[0, 0, 1], [1, 1, 1]],
+ #   'T': [[0, 1, 0], [1, 1, 1]],
+ #   'S': [[0, 1, 1], [1, 1, 0]],
+ #   'Z': [[1, 1, 0], [0, 1, 1]],
+ #   'J': [[1, 0, 0], [1, 1, 1]],
+ #   'L': [[0, 0, 1], [1, 1, 1]],
 }
 SHAPE_COLORS = {
     'I': (0, 255, 255),
     'O': (255, 255, 0),
-    'T': (128, 0, 128),
-    'S': (0, 255, 0),
-    'Z': (255, 0, 0),
-    'J': (0, 0, 255),
-    'L': (255, 165, 0),
+ #   'T': (128, 0, 128),
+ #   'S': (0, 255, 0),
+ #   'Z': (255, 0, 0),
+ #   'J': (0, 0, 255),
+ #   'L': (255, 165, 0),
 }
 
 
@@ -281,26 +290,35 @@ used_hold = False
 previous_shape = None
 shape_bag = []
 player_name = ''
+combo_count = 0
+
 
 
 def delay(milsec):
     return pygame.time.delay(milsec)
 
 class ScorePopup:
-    def __init__(self, text, x, y):
+    def __init__(self, text, x, y, big = False):
         self.text = text
         self.x = x
         self.y = y
         self.timer = 45
+        self.big = big
 
     def draw(self):
         # Draw black outline
-        txt_surface = small_font.render(self.text, True, WHITE)
+        if self.big == True:
+            txt_surface = big_font.render(self.text,True, YELLOW)
+        else:
+         txt_surface = small_font.render(self.text, True, WHITE)
         outline_color = BLACK
         for dx in [-2, 0, 2]:
             for dy in [-2, 0, 2]:
                 if dx != 0 or dy != 0:
-                    outline_surface = small_font.render(self.text, True, outline_color)
+                    if self.big == True:
+                        outline_surface = big_font.render(self.text, True, outline_color)
+                    else:
+                        outline_surface = small_font.render(self.text, True, outline_color)
                     screen.blit(outline_surface, (self.x + dx, self.y + dy))
         # Draw main text
         screen.blit(txt_surface, (self.x, self.y))
@@ -367,20 +385,31 @@ def merge_piece(piece):
                 board[piece['y'] + y][piece['x'] + x] = piece['color']
 
 def clear_lines():
-    global board, score, lines_cleared, level, fall_speed
+    global board, score, lines_cleared, level, fall_speed, combo_count
     new_board = []
     cleared = 0
+    base_scores = [0, 100, 300, 500, 800]
+    popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
+    popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 200
+
+    # Anzahl cleared lines herausfinden
     for row in board:
         if all(row):
             cleared += 1
         else:
             new_board.append(row)
+    lines_cleared += cleared
+        
     #line clear Sounds
     if cleared in (1,2,3):
         play_sound("line_clear.mp3")
-    # Tetris
+
+    # Tetris Sounds + Animation
     elif cleared >= 4:
+
         play_sound("4x_line_clear.mp3")
+        score_popup.append(ScorePopup("TETRIS", popup_x+255, popup_y+100, big=True))
+
         # Indizes der gelöschten Zeilen erfassen
         clear_rows = [i for i, row in enumerate(board) if all(row)]
         # Animation: Von innen nach außen Spalten auf 0 setzen
@@ -402,23 +431,35 @@ def clear_lines():
             pygame.time.delay(75)  # Pause pro Schritt
 
 
-    for _ in range(cleared):
-        new_board.insert(0, [0 for _ in range(COLS)])
-    board = new_board
-    if cleared:
-        base_scores = [0, 100, 300, 500, 800]
-        score_add = int(round(base_scores[cleared] *  level,0))
-        popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
-        popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 200
-        score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
-        score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
-        score += score_add
-        lines_cleared += cleared
         # Bissl kompliziertere Logik für level um Sound einzubauen
         if (lines_cleared % 5) == 0:
             level += 1
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
+
+    # combo mombo
+    if cleared:
+        combo_count += 5
+        score_add = int(round(base_scores[cleared] *  level,0))
+        score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
+        score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
+        if combo_count > 1:
+            combo_score = 50 * combo_count * level
+            score += combo_score
+            score_popup.append(ScorePopup(f"{combo_count}x COMBO", popup_x, popup_y+160))
+            score_popup.append(ScorePopup(f"+{combo_score} pts", popup_x, popup_y + 190))
+        else:
+            score += score_add
+
+    if not cleared:
+        combo_count = 0
+    
+    # Neues Board rendern
+    for _ in range(cleared):
+        new_board.insert(0, [0 for _ in range(COLS)])
+    board = new_board
+    
+        
 
 # --- Lock delay variables ---
 lock_delay = 300 - level*10 # milliseconds
@@ -443,6 +484,15 @@ def drop_piece():
             lock_timer = pygame.time.get_ticks()
             lock_pending = True
 
+def soft_drop():
+    global current_piece, used_hold, lock_timer, lock_pending, score
+    if not move_piece(0, 1):
+        if not lock_pending:
+            lock_timer = pygame.time.get_ticks()
+            lock_pending = True
+    if valid_position(current_piece, 0, 1):
+        score += 1      
+
 def hard_drop():
     global score, lock_pending, used_hold, current_piece
     drops = 0
@@ -463,6 +513,8 @@ def hard_drop():
     if not valid_position(current_piece):
         pygame.time.delay(500)
         game_over()
+
+
 
 def reset_game():
     global board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
@@ -663,10 +715,21 @@ def is_piece_fully_in_air(piece):
                     return False
     return True
 
+# --- Game Over Blink Variables ---
+game_over_blink_timer = 0
+game_over_blink_visible = True
+
 while running:
     update_GUI()
     clock.tick(FPS)
     now = pygame.time.get_ticks()
+
+    # Handle GAME_OVER blinking
+    if state == "GAME_OVER":
+        game_over_blink_timer += clock.get_time()
+        if game_over_blink_timer > 500:  # Blink every 500ms
+            game_over_blink_visible = not game_over_blink_visible
+            game_over_blink_timer = 0
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -730,7 +793,7 @@ while running:
                         lock_timer = pygame.time.get_ticks()
                         play_sound("move.mp3")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    drop_piece()
+                    soft_drop()
                 #Besseres Rotate
                 if event.key in (pygame.K_q, pygame.K_e, pygame.K_w, pygame.K_UP):
                     play_sound("rotate.mp3")
@@ -748,7 +811,7 @@ while running:
                 btn.handle_event(event)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    state = "GAME"   
+                    state = "GAME"
         
         elif state == "ENTER_NAME":
             if event.type == pygame.KEYDOWN:
@@ -777,7 +840,7 @@ while running:
     offset_y = HEIGHT // 2 - GAME_HEIGHT // 2
 
     if state == "MENU":
-        draw_text_centered("TETRIS", 200, None, "game_design\\Border.png", (30, 30, 150), font_size = 80)
+        draw_text_centered(" TETRIS ", 200, None, "game_design\\Border.png", (39, 158, 242), font_size = 80)
         for btn in get_menu_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     
@@ -794,13 +857,12 @@ while running:
         show_leaderboard()
 
     elif state == "GAME":
-        #offset_y = HEIGHT // 2 - GAME_HEIGHT // 2
         pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
         draw_board(offset_x, offset_y)
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
 
-        draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
+        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))))
         draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
         draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
         draw_next_pieces()
@@ -809,7 +871,6 @@ while running:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
-        #offset_y= 0
     
     elif state == "PAUSE":
         draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
@@ -820,8 +881,12 @@ while running:
         draw_text_centered(f"ENTER NAME: {player_name}", 200, None, "game_design\\Border.png", (30, 30, 150))
 
     elif state == "GAME_OVER":
-        draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (30, 30, 150))
-        draw_text_centered(f"Final Score: {score}", 300, None, "game_design\\Border.png")
+        # Always draw the border/background at the correct size
+        if game_over_blink_visible:
+            draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (255,0,0))
+        else:
+            draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (0,0,0))
+        draw_text_centered(f"Final Score: {int(score)}", 300, None, "game_design\\Border.png")
         for btn in get_game_over_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
