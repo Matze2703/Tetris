@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import trange
 from collections import deque
+import time
 
 from Tetris_env import TetrisEnv  # Deine eigene Tetris-Umgebung
 
@@ -65,7 +66,7 @@ def train():
 
     episode_scores = []
     start_episode = 0
-    checkpoint_path = os.path.join(BASE_DIR, "checkpoint.pth")
+    checkpoint_path = os.path.join(BASE_DIR, "Tetris_DQN.pth")
 
     if os.path.exists(csv_path):
         df_old = pd.read_csv(csv_path)
@@ -156,13 +157,20 @@ def train():
     total_reward = 0
 
     print("\nSpiele eine Vorzeigerunde...")
+    fall_interval = 0.5  # alle 0.5 Sekunden automatisch nach unten
+    last_fall_time = time.time()
 
     while not done:
-        env.render()  # Fenster anzeigen
+        env.render()
+        current_time = time.time()
 
-        with torch.no_grad():
-            q_values = model(state)
-            action = q_values.argmax(dim=1).item()
+        if current_time - last_fall_time >= fall_interval:
+            action = 3  # runter
+            last_fall_time = current_time
+        else:
+            with torch.no_grad():
+                q_values = model(state)
+                action = q_values.argmax(dim=1).item()
 
         next_obs, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
@@ -171,6 +179,7 @@ def train():
 
     print(f"Erspielter Score in der Vorzeigerunde: {total_reward}")
     env.close()
+
 
 
 if __name__ == "__main__":

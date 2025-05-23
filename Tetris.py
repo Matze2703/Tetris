@@ -7,8 +7,13 @@ To do:
 
 
             - Potentiell besseres rotate mit Q und E
+            - ist eingebaut, bitte überprüfen
+
             - Transition funktion mit Animationen untersuchen
 
+            - infinite lock_delay wenn kurz vor lock rotate getriggert wird
+
+            - Brauchst du das auskommentierte in Zeile 685-687 noch?
                 
         Matze:
             - Level wird jetzt richtig geupdatet
@@ -16,7 +21,7 @@ To do:
             - ist des mein kack laptop oder stuttert das spiel ab und zu?
             - Ich sag Laptop
 
-            - Brauchst du das auskommentierte in Zeile 685-687 noch?
+            
        
 
 
@@ -28,7 +33,7 @@ pygame.init()
 #############
 # CONSTANTS #
 #############
-WIDTH, HEIGHT = 1000, 800
+WIDTH, HEIGHT = 1200, 800
 GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
@@ -324,11 +329,13 @@ def create_piece():
         'x': COLS // 2 - len(SHAPES[shape][0]) // 2,
         'y': 0,
         'color': SHAPE_COLORS[shape]
-
     }
 
-def rotate(matrix):
-    return [list(row)[::-1] for row in zip(*matrix)]
+def rotate(matrix, input):
+    if input == 113:    # Key Q
+        return list(zip(*matrix))[::-1]
+    else:   # Key E,W,UP
+        return [list(row)[::-1] for row in zip(*matrix)]
 
 def wall_kick(piece, rotated):
     for dx in [0, -1, 1, -2, 2]:
@@ -361,7 +368,6 @@ def merge_piece(piece):
 
 def clear_lines():
     global board, score, lines_cleared, level, fall_speed
-    old_level = level
     new_board = []
     cleared = 0
     for row in board:
@@ -372,8 +378,29 @@ def clear_lines():
     #line clear Sounds
     if cleared in (1,2,3):
         play_sound("line_clear.mp3")
+    # Tetris
     elif cleared >= 4:
         play_sound("4x_line_clear.mp3")
+        # Indizes der gelöschten Zeilen erfassen
+        clear_rows = [i for i, row in enumerate(board) if all(row)]
+        # Animation: Von innen nach außen Spalten auf 0 setzen
+        for step in range(COLS // 2):
+            for row in clear_rows:
+                board[row][COLS // 2 - step - 1] = 0  # nach links
+                board[row][COLS // 2 + step] = 0      # nach rechts
+
+            # Board aktualisieren
+            pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
+            draw_board(offset_x, offset_y)
+            draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
+            draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
+            draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
+            draw_next_pieces()
+            draw_hold_piece()
+            pygame.display.update()
+
+            pygame.time.delay(75)  # Pause pro Schritt
+
 
     for _ in range(cleared):
         new_board.insert(0, [0 for _ in range(COLS)])
@@ -388,7 +415,7 @@ def clear_lines():
         score += score_add
         lines_cleared += cleared
         # Bissl kompliziertere Logik für level um Sound einzubauen
-        if (lines_cleared % 10) == 0:
+        if (lines_cleared % 5) == 0:
             level += 1
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
@@ -609,11 +636,10 @@ def draw_background():
         for y in range(0, HEIGHT, tile_height):
             screen.blit(bg_tile, (x, y))
 
-
 def update_GUI():
     global WIDTH, HEIGHT
     WIDTH, HEIGHT = screen.get_size()
-    screen.fill(WHITE)
+    screen.fill(BLACK)
     draw_background()
 
 
@@ -686,7 +712,7 @@ while running:
                             game_over()
                     else:
                         # Reset lock timer if still able to fall
-                        lock_pending = False   
+                        lock_pending = False
     #       elif now - last_fall > fall_speed:
     #          drop_piece()
         #        last_fall = now
@@ -705,9 +731,10 @@ while running:
                         play_sound("move.mp3")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
                     drop_piece()
-                if event.key in (pygame.K_w, pygame.K_UP):
+                #Besseres Rotate
+                if event.key in (pygame.K_q, pygame.K_e, pygame.K_w, pygame.K_UP):
                     play_sound("rotate.mp3")
-                    rotated = rotate(current_piece['matrix'])
+                    rotated = rotate(current_piece['matrix'],event.key)
                     wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
                     play_sound("drop.mp3")

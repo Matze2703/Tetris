@@ -33,7 +33,7 @@ class TetrisEnv(gym.Env):
         super(TetrisEnv, self).__init__()
         self.board = np.zeros((ROWS, COLS), dtype=int)
         self.score = 0
-        self.level = 0
+        self.level = 1
         self.lines_cleared = 0
 
         self.action_space = spaces.Discrete(6)  # 0: nichts, 1: links, 2: rechts, 3: runter, 4: drehen, 5: harter Drop
@@ -58,7 +58,7 @@ class TetrisEnv(gym.Env):
 
         self.board.fill(0)
         self.score = 0
-        self.level = 0
+        self.level = 1
         self.lines_cleared = 0
         self._spawn_piece()
         return self._get_obs(), {}
@@ -96,7 +96,7 @@ class TetrisEnv(gym.Env):
 
         self.lines_cleared += lines_before
         self.score += (lines_before ** 2) * 100
-        self.level = self.lines_cleared // 10
+        self.level = 1 + self.lines_cleared // 5
         self._spawn_piece()
 
     def _get_obs(self):
@@ -125,12 +125,14 @@ class TetrisEnv(gym.Env):
                 self.piece_y += 1
             else:
                 self._lock_piece()
+
         elif action == 4:  # drehen
             rotated = list(zip(*self.current_piece[::-1]))
             rotated = [list(row) for row in rotated]
             if self._valid_position(rotated, self.piece_x, self.piece_y):
                 self.current_piece = rotated
-        elif action == 5:  # harter Drop
+
+        elif action == 5:  # Harddrop
             while self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
             self._lock_piece()
@@ -150,6 +152,11 @@ class TetrisEnv(gym.Env):
             pygame.init()
             self.screen = pygame.display.set_mode((COLS * self.block_size, ROWS * self.block_size))
             self.clock = pygame.time.Clock()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
 
         self.screen.fill((0, 0, 0))
         for y in range(ROWS):
