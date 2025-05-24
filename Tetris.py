@@ -482,15 +482,14 @@ def clear_lines():
 
             pygame.time.delay(75)  # Pause pro Schritt
 
-
+    # combo mombo + level
+    if cleared:
         # Bissl kompliziertere Logik für level um Sound einzubauen
         if (lines_cleared % 5) == 0:
             level += 1
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
-
-    # combo mombo
-    if cleared:
+        
         combo_count += 1
         score_add = int(round(base_scores[cleared] *  level,0))
         score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
@@ -939,7 +938,7 @@ while running:
         draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
         draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
         draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
-        draw_text_centered(f"Highscore:", 400, WIDTH // 2 -300, font_size=30)
+        draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
                 
         #Neuer Highscore
         if score > highscore:
@@ -948,7 +947,7 @@ while running:
                 play_sound("new_record.mp3")
                 score_popup.append(ScorePopup("!! NEW HIGHSCORE !!", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
                 new_highscore = True
-        draw_text_centered(f"{highscore}", 470, WIDTH // 2 -300, font_size=40)
+        draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
 
         draw_next_pieces()
         draw_hold_piece()
