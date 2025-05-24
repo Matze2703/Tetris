@@ -17,12 +17,11 @@ To do:
 
             - Transition funktion mit Animationen untersuchen (wie a coole powerpoint)
 
-            - Transition funktion mit Animationen untersuchen
-
             - Brauchst du das auskommentierte in Zeile 685-687 noch?
                 
         Matze:
-            - Level wird jetzt richtig geupdatet
+            - Scores werden jetzt verschlüsselt
+            - Highscore Anzeige
 
     
     Irgendwann später:
@@ -34,7 +33,8 @@ To do:
 
 """
 
-import pygame, sys, random, time, os
+import pygame, sys, random, os
+from cryptography.fernet import Fernet
 pygame.init()
 
 #############
@@ -45,6 +45,7 @@ GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
+new_highscore = False
 
 
 #Config für Musik (und weiteres in Zukunft)
@@ -56,9 +57,53 @@ if not os.path.isfile("config.txt"):
         datei.write("0.5")
 
 #File für Scores
-if not os.path.isfile("Scores.txt"):
+if not os.path.isfile("Scores.txt.enc"):
     with open("Scores.txt", "w") as datei:
         print("Score erstellt")
+
+
+# Verschlüsselung der Scores
+# Schlüssel generieren und speichern
+def generate_key():
+    key = Fernet.generate_key()
+    with open("schluessel.key", "wb") as key_file:
+        key_file.write(key)
+
+# Schlüssel laden
+def load_key():
+    return open("schluessel.key", "rb").read()
+
+# Datei verschlüsseln
+def encrypt_file(filename):
+    key = load_key()
+    f = Fernet(key)
+
+    with open(filename, "rb") as file:
+        file_data = file.read()
+
+    encrypted_data = f.encrypt(file_data)
+
+    with open(filename + ".enc", "wb") as file:
+        file.write(encrypted_data)
+    os.remove(filename)
+
+# Datei entschlüsseln
+def decrypt_file(encrypted_filename, output_filename):
+    key = load_key()
+    f = Fernet(key)
+
+    with open(encrypted_filename, "rb") as file:
+        encrypted_data = file.read()
+
+    decrypted_data = f.decrypt(encrypted_data)
+
+    with open(output_filename, "wb") as file:
+        file.write(decrypted_data)
+
+if os.path.isfile("Scores.txt"):
+    generate_key()
+    encrypt_file("Scores.txt")
+
 
 # Musik
 #Einstellungen importieren
@@ -173,6 +218,10 @@ def go_back():
 
 def game_over():
     global state
+    state = "GAME_OVER"
+
+def save_score():
+    global state
     state = "ENTER_NAME"
 
 def change_volume(variable,delta):
@@ -199,7 +248,8 @@ def show_leaderboard():
     global state
     state = "LEADERBOARD"
     leaderboard = {}
-    
+    decrypt_file("Scores.txt.enc", "Scores.txt")
+
     with open("Scores.txt", "r") as datei:
         #Dictionary aus Datei erstellen
         for line in datei:
@@ -232,6 +282,7 @@ def show_leaderboard():
     with open("Scores.txt", "w") as datei:
         for name, score in leaderboard.items():
             datei.write(f"{name}: {score}\n")
+    encrypt_file("Scores.txt")
         
 
 
@@ -271,7 +322,8 @@ def get_pause_buttons(width, height):
 def get_game_over_buttons(width, height):
     return [
         Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
+        Button("Save Score", WIDTH // 2 - 100, HEIGHT // 2 + 260, 200, 50, save_score),
     ]
 
 
@@ -439,7 +491,7 @@ def clear_lines():
 
     # combo mombo
     if cleared:
-        combo_count += 5
+        combo_count += 1
         score_add = int(round(base_scores[cleared] *  level,0))
         score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
         score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
@@ -805,6 +857,7 @@ while running:
                     
                 elif event.key == pygame.K_f:
                     hold_current_piece()
+
         
         elif state == "PAUSE":
             for btn in get_pause_buttons(WIDTH, HEIGHT):
@@ -816,8 +869,12 @@ while running:
         elif state == "ENTER_NAME":
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    with open("Scores.txt","a") as datei:       # Score speichern
+                    decrypt_file("Scores.txt.enc", "Scores.txt")
+                    # Score speichern
+                    with open("Scores.txt","a") as datei:
                         datei.write(f"{player_name.upper()}: {score}\n")
+                        decrypt_file("Scores.txt.enc", "Scores.txt")            
+                    encrypt_file("Scores.txt")
                     player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
@@ -862,15 +919,44 @@ while running:
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
 
-        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))))
-        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
-        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
+        # aktuellen Highscore herausfinden
+        decrypt_file("Scores.txt.enc", "Scores.txt")
+        with open("Scores.txt", "r") as datei:
+            highscore = 0
+            for line in datei:
+                line = line.strip()
+                name = ''
+                data_score = ''
+                
+                if ':' in line:
+                    parts = line.split(':')
+                    name = parts[0].strip()
+                    data_score = int(''.join(filter(str.isdigit, parts[1])))
+                    if data_score > highscore:
+                        highscore = data_score
+        encrypt_file("Scores.txt")
+
+        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
+        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Highscore:", 400, WIDTH // 2 -300, font_size=30)
+                
+        #Neuer Highscore
+        if score > highscore:
+            highscore = score
+            if not new_highscore:
+                play_sound("new_record.mp3")
+                score_popup.append(ScorePopup("!! NEW HIGHSCORE !!", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
+                new_highscore = True
+        draw_text_centered(f"{highscore}", 470, WIDTH // 2 -300, font_size=40)
+
         draw_next_pieces()
         draw_hold_piece()
         for popup in score_popup:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
+
     
     elif state == "PAUSE":
         draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
