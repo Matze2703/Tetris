@@ -1,46 +1,17 @@
-"""
 
-To do:
-        olkek:
-            - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
-                --> https://tetris.wiki/Scoring
-                        -> hard drop ok
-                        -> soft drop ok
-                        -> line clear ok
-                        -> fuck t spins
-                        -> perfect clear?
-                        -> combo?
-
-            - Potentiell besseres rotate mit Q und E 
-                -> erfordert eine änderung von grundstruktur der shapes (lohnt sich nit)
-
-            - Transition funktion mit Animationen untersuchen (wie a coole powerpoint)
-            
-
-    
-    Irgendwann später:
-            - buttons und menu overhaul mit mouse hover und so
-    
-    
-    Fehler:
-            - ist des mein kack laptop oder stuttert das spiel ab und zu?
-       
-
-
-"""
-
-
-import pygame, sys, random, time, os
+import pygame, sys, random, os
+from cryptography.fernet import Fernet
 pygame.init()
 
 #############
 # CONSTANTS #
 #############
-WIDTH, HEIGHT = 1000, 800
+WIDTH, HEIGHT = 1200, 800
 GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
+new_highscore = False
 
 
 #Config für Musik (und weiteres in Zukunft)
@@ -52,11 +23,53 @@ if not os.path.isfile("config.txt"):
         datei.write("0.5")
 
 #File für Scores
-if not os.path.isfile("Scores.txt"):
+if not os.path.isfile("Scores.txt.enc"):
     with open("Scores.txt", "w") as datei:
         print("Score erstellt")
 
-player_name = ''
+
+# Verschlüsselung der Scores
+# Schlüssel generieren und speichern
+def generate_key():
+    key = Fernet.generate_key()
+    with open("schluessel.key", "wb") as key_file:
+        key_file.write(key)
+
+# Schlüssel laden
+def load_key():
+    return open("schluessel.key", "rb").read()
+
+# Datei verschlüsseln
+def encrypt_file(filename):
+    key = load_key()
+    f = Fernet(key)
+
+    with open(filename, "rb") as file:
+        file_data = file.read()
+
+    encrypted_data = f.encrypt(file_data)
+
+    with open(filename + ".enc", "wb") as file:
+        file.write(encrypted_data)
+    os.remove(filename)
+
+# Datei entschlüsseln
+def decrypt_file(encrypted_filename, output_filename):
+    key = load_key()
+    f = Fernet(key)
+
+    with open(encrypted_filename, "rb") as file:
+        encrypted_data = file.read()
+
+    decrypted_data = f.decrypt(encrypted_data)
+
+    with open(output_filename, "wb") as file:
+        file.write(decrypted_data)
+
+if os.path.isfile("Scores.txt"):
+    generate_key()
+    encrypt_file("Scores.txt")
+
 
 # Musik
 #Einstellungen importieren
@@ -100,6 +113,7 @@ previous_state = ''
 
 font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
 small_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 24)
+big_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 64)
 
 # Shapes and Colors
 SHAPES = {
@@ -170,6 +184,10 @@ def go_back():
 
 def game_over():
     global state
+    state = "GAME_OVER"
+
+def save_score():
+    global state
     state = "ENTER_NAME"
 
 def change_volume(variable,delta):
@@ -196,7 +214,8 @@ def show_leaderboard():
     global state
     state = "LEADERBOARD"
     leaderboard = {}
-    
+    decrypt_file("Scores.txt.enc", "Scores.txt")
+
     with open("Scores.txt", "r") as datei:
         #Dictionary aus Datei erstellen
         for line in datei:
@@ -229,6 +248,7 @@ def show_leaderboard():
     with open("Scores.txt", "w") as datei:
         for name, score in leaderboard.items():
             datei.write(f"{name}: {score}\n")
+    encrypt_file("Scores.txt")
         
 
 
@@ -268,7 +288,8 @@ def get_pause_buttons(width, height):
 def get_game_over_buttons(width, height):
     return [
         Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 130, 200, 50, return_to_menu),
+        Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
+        Button("Save Score", WIDTH // 2 - 100, HEIGHT // 2 + 260, 200, 50, save_score),
     ]
 
 
@@ -292,24 +313,25 @@ def delay(milsec):
     return pygame.time.delay(milsec)
 
 class ScorePopup:
-    def __init__(self, text, x, y):
+    def __init__(self, text, x, y, big = False):
         self.text = text
         self.x = x
         self.y = y
         self.timer = 45
+        self.big = big
 
     def draw(self):
         # Draw black outline
-        if self.text == "TETRIS":
-            txt_surface = font.render(self.text,True, YELLOW)
+        if self.big:
+            txt_surface = big_font.render(self.text,True, YELLOW)
         else:
          txt_surface = small_font.render(self.text, True, WHITE)
         outline_color = BLACK
         for dx in [-2, 0, 2]:
             for dy in [-2, 0, 2]:
                 if dx != 0 or dy != 0:
-                    if self.text == "TETRIS":
-                        outline_surface = font.render(self.text, True, outline_color)
+                    if self.big:
+                        outline_surface = big_font.render(self.text, True, outline_color)
                     else:
                         outline_surface = small_font.render(self.text, True, outline_color)
                     screen.blit(outline_surface, (self.x + dx, self.y + dy))
@@ -340,11 +362,13 @@ def create_piece():
         'x': COLS // 2 - len(SHAPES[shape][0]) // 2,
         'y': 0,
         'color': SHAPE_COLORS[shape]
-
     }
 
-def rotate(matrix):
-    return [list(row)[::-1] for row in zip(*matrix)]
+def rotate(matrix, input):
+    if input == 113:    # Key Q
+        return list(zip(*matrix))[::-1]
+    else:   # Key E,W,UP
+        return [list(row)[::-1] for row in zip(*matrix)]
 
 def wall_kick(piece, rotated):
     for dx in [0, -1, 1, -2, 2]:
@@ -376,40 +400,81 @@ def merge_piece(piece):
                 board[piece['y'] + y][piece['x'] + x] = piece['color']
 
 def clear_lines():
-    global board, score, lines_cleared, level, fall_speed
+    global board, score, lines_cleared, level, fall_speed, combo_count
     old_level = level
     new_board = []
     cleared = 0
+    base_scores = [0, 100, 300, 500, 800]
+    popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
+    popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 200
+
+    # Anzahl cleared lines herausfinden
     for row in board:
         if all(row):
             cleared += 1
         else:
             new_board.append(row)
+    lines_cleared += cleared
+        
     #line clear Sounds
     if cleared in (1,2,3):
         play_sound("line_clear.mp3")
-    elif cleared >= 4:
-        play_sound("4x_line_clear.mp3")
 
-    for _ in range(cleared):
-        new_board.insert(0, [0 for _ in range(COLS)])
-    board = new_board
+    # Tetris Sounds + Animation
+    elif cleared >= 4:
+
+        play_sound("4x_line_clear.mp3")
+        score_popup.append(ScorePopup("TETRIS", popup_x+255, popup_y+100, big=True))
+
+        # Indizes der gelöschten Zeilen erfassen
+        clear_rows = [i for i, row in enumerate(board) if all(row)]
+        # Animation: Von innen nach außen Spalten auf 0 setzen
+        for step in range(COLS // 2):
+            for row in clear_rows:
+                board[row][COLS // 2 - step - 1] = 0  # nach links
+                board[row][COLS // 2 + step] = 0      # nach rechts
+
+            # Board aktualisieren
+            pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
+            draw_board(offset_x, offset_y)
+            draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
+            draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
+            draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
+            draw_next_pieces()
+            draw_hold_piece()
+            pygame.display.update()
+
+            pygame.time.delay(75)  # Pause pro Schritt
+
+    # combo mombo + level
     if cleared:
-        base_scores = [0, 100, 300, 500, 800]
-        score_add = int(round(base_scores[cleared] *  level,0))
-        popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
-        popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 200
-        score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
-        score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
-        if cleared == 4:
-            score_popup.append(ScorePopup("TETRIS", popup_x+300, popup_y+100))
-        score += score_add
-        lines_cleared += cleared
         # Bissl kompliziertere Logik für level um Sound einzubauen
         level = 1 + lines_cleared // 5  #<-- je x zeilen wird level erhöcht
         if old_level != level:
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
+        
+        combo_count += 1
+        score_add = int(round(base_scores[cleared] *  level,0))
+        score_popup.append(ScorePopup(f"{cleared}x Line clear", popup_x, popup_y))
+        score_popup.append(ScorePopup(f"+{score_add} pts", popup_x, popup_y + 30))
+        if combo_count > 1:
+            combo_score = 50 * combo_count * level
+            score += combo_score
+            score_popup.append(ScorePopup(f"{combo_count}x COMBO", popup_x, popup_y+160))
+            score_popup.append(ScorePopup(f"+{combo_score} pts", popup_x, popup_y + 190))
+        else:
+            score += score_add
+
+    if not cleared:
+        combo_count = 0
+    
+    # Neues Board rendern
+    for _ in range(cleared):
+        new_board.insert(0, [0 for _ in range(COLS)])
+    board = new_board
+    
+        
 
 # --- Lock delay variables ---
 lock_delay = 300 - level*10 # milliseconds
@@ -718,11 +783,10 @@ def draw_background():
         for y in range(0, HEIGHT, tile_height):
             screen.blit(bg_tile, (x, y))
 
-
 def update_GUI():
     global WIDTH, HEIGHT
     WIDTH, HEIGHT = screen.get_size()
-    screen.fill(WHITE)
+    screen.fill(BLACK)
     draw_background()
 
 
@@ -805,9 +869,10 @@ while running:
                         play_sound("move.mp3")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
                     soft_drop()
-                if event.key in (pygame.K_w, pygame.K_UP):
+                #Besseres Rotate
+                if event.key in (pygame.K_q, pygame.K_e, pygame.K_w, pygame.K_UP):
                     play_sound("rotate.mp3")
-                    rotated = rotate(current_piece['matrix'])
+                    rotated = rotate(current_piece['matrix'],event.key)
                     wall_kick(current_piece, rotated)
                 elif event.key == pygame.K_SPACE:
                     play_sound("drop.mp3")
@@ -815,6 +880,7 @@ while running:
                     
                 elif event.key == pygame.K_f:
                     hold_current_piece()
+
         
         elif state == "PAUSE":
             for btn in get_pause_buttons(WIDTH, HEIGHT):
@@ -851,8 +917,12 @@ while running:
         elif state == "ENTER_NAME":
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    with open("Scores.txt","a") as datei:       # Score speichern
+                    decrypt_file("Scores.txt.enc", "Scores.txt")
+                    # Score speichern
+                    with open("Scores.txt","a") as datei:
                         datei.write(f"{player_name.upper()}: {score}\n")
+                        decrypt_file("Scores.txt.enc", "Scores.txt")            
+                    encrypt_file("Scores.txt")
                     player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
@@ -894,15 +964,44 @@ while running:
         draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
         draw_piece(current_piece, offset_x, offset_y)
 
-        draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
-        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
-        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
+        # aktuellen Highscore herausfinden
+        decrypt_file("Scores.txt.enc", "Scores.txt")
+        with open("Scores.txt", "r") as datei:
+            highscore = 0
+            for line in datei:
+                line = line.strip()
+                name = ''
+                data_score = ''
+                
+                if ':' in line:
+                    parts = line.split(':')
+                    name = parts[0].strip()
+                    data_score = int(''.join(filter(str.isdigit, parts[1])))
+                    if data_score > highscore:
+                        highscore = data_score
+        encrypt_file("Scores.txt")
+
+        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
+        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
+                
+        #Neuer Highscore
+        if score > highscore:
+            highscore = score
+            if not new_highscore:
+                play_sound("new_record.mp3")
+                score_popup.append(ScorePopup("!! NEW HIGHSCORE !!", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
+                new_highscore = True
+        draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
+
         draw_next_pieces()
         draw_hold_piece()
         for popup in score_popup:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
+
     
     elif state == "PAUSE":
         draw_text_centered("PAUSED", 200, None, "game_design\\Border.png", (30, 30, 150))
