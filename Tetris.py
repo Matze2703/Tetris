@@ -316,7 +316,6 @@ def get_pause_buttons(width, height):
         Button("Restart", width // 2 - 100, height // 2 +100, 200, 80, start_game),
         Button("Options", width // 2 - 100, height // 2 +200, 200, 80, go_to_options),
         Button("Main Menu", width // 2 - 100, height // 2 +300, 200, 80, return_to_menu),
-
     ]
 
 def get_game_over_buttons(width, height):
@@ -326,6 +325,10 @@ def get_game_over_buttons(width, height):
         Button("Save Score", WIDTH // 2 - 100, HEIGHT // 2 + 260, 200, 50, save_score),
     ]
 
+def get_enter_name_buttons(width, height):
+    return [
+        Button("Cancel", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, go_back),
+    ]
 
 
 ##########################
@@ -362,7 +365,7 @@ class ScorePopup:
         if self.big == True:
             txt_surface = big_font.render(self.text,True, YELLOW)
         else:
-         txt_surface = small_font.render(self.text, True, WHITE)
+            txt_surface = small_font.render(self.text, True, WHITE)
         outline_color = BLACK
         for dx in [-2, 0, 2]:
             for dy in [-2, 0, 2]:
@@ -866,6 +869,9 @@ while running:
                     state = "GAME"
         
         elif state == "ENTER_NAME":
+            for btn in get_enter_name_buttons(WIDTH, HEIGHT):
+                btn.handle_event(event)
+            previous_state = "GAME_OVER"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     decrypt_file("Scores.txt.enc", "Scores.txt")
@@ -878,6 +884,8 @@ while running:
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
                     player_name = player_name[:-1]  # Letztes Zeichen löschen
+                elif event.key == pygame.K_ESCAPE: # Wieder raus ohne speichern
+                    go_back()
                 else:
                     player_name += event.unicode  # Zeichen hinzufügen
 
@@ -964,6 +972,8 @@ while running:
     
     elif state == "ENTER_NAME":
         draw_text_centered(f"ENTER NAME: {player_name}", 200, None, "game_design\\Border.png", (30, 30, 150))
+        for btn in get_enter_name_buttons(WIDTH, HEIGHT):
+            btn.draw(screen)
 
     elif state == "GAME_OVER":
         # Always draw the border/background at the correct size
