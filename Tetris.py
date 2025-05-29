@@ -1,3 +1,27 @@
+"""
+
+
+
+
+
+████████╗███████╗████████╗ ██████╗  ██╗███████╗           
+╚══██╔══╝██╔════╝╚══██╔══╝ ██╔══██╗ ██║██╔════╝ 
+   ██║   █████╗     ██║    ██████╔╝ ██║███████╗ 
+   ██║   ██╔══╝     ██║    ██╔══██╗ ██║╚════██║  
+   ██║   ███████╗   ██║    ██║  ██║ ██║███████║  ...2
+   ╚═╝   ╚══════╝   ╚═╝    ╚═╝  ╚═╝ ╚═╝╚══════╝ 
+
+   Das beste Spiel seit "Tetris"!
+
+   ©Copyright Polnische Mafia
+
+    
+
+
+
+
+
+"""
 
 import pygame, sys, random, os
 from cryptography.fernet import Fernet
@@ -987,6 +1011,7 @@ while running:
                     data_score = int(''.join(filter(str.isdigit, parts[1])))
                     if data_score > highscore:
                         highscore = data_score
+                        
         encrypt_file("Scores.txt")
 
         draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
