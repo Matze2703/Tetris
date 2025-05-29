@@ -1,37 +1,3 @@
-"""
-
-To do:
-        olkek:
-            - Punkte-System Overhaul: mehr Konditionen um Punkte zu geben und visuell verbessern
-                --> https://tetris.wiki/Scoring
-                        -> hard drop ok
-                        -> soft drop ok
-                        -> line clear ok
-                        -> fuck t spins
-                        -> perfect clear?
-                        -> combo?
-
-            - Potentiell besseres rotate mit Q und E 
-                -> erfordert eine änderung von grundstruktur der shapes (lohnt sich nit)
-                -> Hätte was gemacht, schau es dir mal an
-
-            - Transition funktion mit Animationen untersuchen (wie a coole powerpoint)
-
-            - Brauchst du das auskommentierte in Zeile 685-687 noch?
-                
-        Matze:
-            - Scores werden jetzt verschlüsselt
-            - Highscore Anzeige
-
-    
-    Irgendwann später:
-            - buttons und menu overhaul mit mouse hover und so
-    
-    
-    Fehler:
-            - lock delay + rotato = infinito tormento
-
-"""
 
 import pygame, sys, random, os
 from cryptography.fernet import Fernet
@@ -344,9 +310,6 @@ next_queue = []
 used_hold = False
 previous_shape = None
 shape_bag = []
-player_name = ''
-combo_count = 0
-
 
 
 def delay(milsec):
@@ -362,7 +325,7 @@ class ScorePopup:
 
     def draw(self):
         # Draw black outline
-        if self.big == True:
+        if self.big:
             txt_surface = big_font.render(self.text,True, YELLOW)
         else:
             txt_surface = small_font.render(self.text, True, WHITE)
@@ -370,7 +333,7 @@ class ScorePopup:
         for dx in [-2, 0, 2]:
             for dy in [-2, 0, 2]:
                 if dx != 0 or dy != 0:
-                    if self.big == True:
+                    if self.big:
                         outline_surface = big_font.render(self.text, True, outline_color)
                     else:
                         outline_surface = small_font.render(self.text, True, outline_color)
@@ -441,6 +404,7 @@ def merge_piece(piece):
 
 def clear_lines():
     global board, score, lines_cleared, level, fall_speed, combo_count
+    old_level = level
     new_board = []
     cleared = 0
     base_scores = [0, 100, 300, 500, 800]
@@ -488,8 +452,8 @@ def clear_lines():
     # combo mombo + level
     if cleared:
         # Bissl kompliziertere Logik für level um Sound einzubauen
-        if (lines_cleared % 5) == 0:
-            level += 1
+        level = 1 + lines_cleared // 5  #<-- je x zeilen wird level erhöcht
+        if old_level != level:
             play_sound("level_up.mp3")
         fall_speed = max(100, 500 - (level - 1) * 30)
         
@@ -556,7 +520,7 @@ def hard_drop():
     popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
     popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 280
     score_popup.append(ScorePopup(f"Hard Drop", popup_x, popup_y))
-    score_popup.append(ScorePopup(f"+{drops * 2} pts", popup_x, popup_y +30))
+    score_popup.append(ScorePopup(f"+{drops * 2} pt#s", popup_x, popup_y +30))
     # Immediately lock and merge the piece, skip lock delay
     merge_piece(current_piece)
     clear_lines()
@@ -567,8 +531,6 @@ def hard_drop():
     if not valid_position(current_piece):
         pygame.time.delay(500)
         game_over()
-
-
 
 def reset_game():
     global board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
@@ -610,6 +572,7 @@ def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, BLACK, rect, 1)
 
+
 # Next Pieces Vorschau
 def draw_next_pieces():
     box_width, box_height = 160, 260
@@ -630,6 +593,7 @@ def draw_next_pieces():
         y_offset = NEXT_PIECE_Y + i * 80 + (60 - piece_height) // 2 + 20
         draw_piece_in_box(piece, x_offset, y_offset, 0.75)
 
+
 # Hold Piece 
 def draw_hold_piece():
     box_width, box_height = 120, 120
@@ -649,6 +613,45 @@ def draw_hold_piece():
 
     draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
+
+# Game states
+def game_over():
+    global state
+    state = "GAME_OVER"
+
+def start_game():
+    reset_game()
+    global state
+    state = "GAME"
+
+def return_to_menu():
+    global state
+    state = "MENU"
+
+def resume_game():
+    global state
+    state ="GAME"
+
+
+# Buttons
+menu_buttons = [
+    Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)
+]
+pause_buttons = [
+    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
+]
+game_over_buttons = [
+    Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
+    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
+]
+
+
+
+##########
+# DESIGN #
+##########
+
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
         for x in range(COLS):
@@ -658,6 +661,53 @@ def draw_board(offset_x, offset_y):
             if color:
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, BLACK, rect, 2)
+
+def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
+    matrix = piece['matrix']
+    color = piece['color']
+    for y, row in enumerate(matrix):
+        for x, cell in enumerate(row):
+            if cell:
+                rect = pygame.Rect(offset_x + x * BLOCK_SIZE * scale, offset_y + y * BLOCK_SIZE * scale,
+                                   BLOCK_SIZE * scale, BLOCK_SIZE * scale)
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, BLACK, rect, 1)
+
+def draw_next_pieces():
+    box_width, box_height = 160, 260
+    NEXT_PIECE_X = WIDTH // 2 + 200
+    NEXT_PIECE_Y = 100
+
+    pygame.draw.rect(screen, BLACK, (NEXT_PIECE_X, NEXT_PIECE_Y, box_width, box_height))
+    pygame.draw.rect(screen, GREY, (NEXT_PIECE_X, NEXT_PIECE_Y, box_width, box_height), 4)
+
+    draw_text_centered("Next:", NEXT_PIECE_Y-45, NEXT_PIECE_X+75)
+    
+    for i, piece in enumerate(next_queue[:3]):
+        matrix = piece['matrix']
+        piece_width = len(matrix[0]) * BLOCK_SIZE * 0.75
+        piece_height = len(matrix) * BLOCK_SIZE * 0.75
+        x_offset = NEXT_PIECE_X + (box_width - piece_width) // 2 - 15
+        y_offset = NEXT_PIECE_Y + i * 80 + (60 - piece_height) // 2 + 20
+        draw_piece_in_box(piece, x_offset, y_offset, 0.75)
+
+def draw_hold_piece():
+    box_width, box_height = 120, 120
+    HOLD_PIECE_X = WIDTH // 2 - 350
+    HOLD_PIECE_Y = 50
+
+    pygame.draw.rect(screen, BLACK, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 0)
+    pygame.draw.rect(screen, GREY, (HOLD_PIECE_X - 10, HOLD_PIECE_Y - 10, box_width, box_height), 5)
+    
+    if hold_piece:
+        matrix = hold_piece['matrix']
+        shape_width = len(matrix[0]) * BLOCK_SIZE
+        shape_height = len(matrix) * BLOCK_SIZE
+        x_offset = HOLD_PIECE_X + (box_width - shape_width) // 2 - 10
+        y_offset = HOLD_PIECE_Y + (box_height - shape_height) // 2 - 10
+        draw_piece_in_box(hold_piece, x_offset, y_offset, 1)
+
+    draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
 def draw_piece(piece, offset_x, offset_y, ghost=False):
     color = piece['color']
@@ -679,12 +729,6 @@ def get_ghost_piece(piece):
     while valid_position(ghost, dy=1):
         ghost['y'] += 1
     return ghost
-
-
-
-##########
-# DESIGN #
-##########
 
 def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE, font_size = 40):
     fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", font_size)
@@ -814,26 +858,6 @@ while running:
                     go_back()
             
         elif state == "GAME":
-            if lock_pending:
-                if pygame.time.get_ticks() - lock_timer >= lock_delay:
-                    # Only merge if the piece cannot move down
-                    if not valid_position(current_piece, dy=1):
-                        merge_piece(current_piece)
-                        clear_lines()
-                        current_piece = next_queue.pop(0)
-                        next_queue.append(create_piece())
-                        used_hold = False
-                        lock_pending = False
-                        if not valid_position(current_piece):
-                            pygame.time.delay(500)
-                            game_over()
-                    else:
-                        # Reset lock timer if still able to fall
-                        lock_pending = False
-    #       elif now - last_fall > fall_speed:
-    #          drop_piece()
-        #        last_fall = now
-
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     state = "PAUSE"
@@ -866,7 +890,32 @@ while running:
                 btn.handle_event(event)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    state = "GAME"
+                    state = "GAME"   
+        elif state == "GAME_OVER":
+            for btn in get_game_over_buttons(WIDTH, HEIGHT):
+                btn.handle_event(event)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    state = "MENU"
+
+    if state == "GAME":
+        if lock_pending:
+            if pygame.time.get_ticks() - lock_timer >= lock_delay:
+                # Only merge if the piece cannot move down
+                if not valid_position(current_piece, dy=1):
+                    merge_piece(current_piece)
+                    clear_lines()
+                    current_piece = next_queue.pop(0)
+                    next_queue.append(create_piece())
+                    used_hold = False
+                    lock_pending = False
+                    if not valid_position(current_piece):
+                        pygame.time.delay(500)
+                        game_over()
+                else:
+                    # Reset lock timer if still able to fall
+                    lock_pending = False   
+                
         
         elif state == "ENTER_NAME":
             for btn in get_enter_name_buttons(WIDTH, HEIGHT):
@@ -892,9 +941,6 @@ while running:
         elif state == "GAME_OVER":
             for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    state = "MENU"
 
     if state == "GAME" and now - fall_time > fall_speed:
         drop_piece()
@@ -981,7 +1027,7 @@ while running:
             draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (255,0,0))
         else:
             draw_text_centered("GAME OVER", 200, None, "game_design\\Border.png", (0,0,0))
-        draw_text_centered(f"Final Score: {int(score)}", 300, None, "game_design\\Border.png")
+        draw_text_centered(f"Final Score: {score}", 300, None, "game_design\\Border.png")
         for btn in get_game_over_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
 
