@@ -25,6 +25,7 @@
 
 import pygame, sys, random, os
 from cryptography.fernet import Fernet
+import database_access as sql_db
 pygame.init()
 
 #############
@@ -35,7 +36,7 @@ GAME_WIDTH, GAME_HEIGHT = 300, 600
 BLOCK_SIZE = 30
 COLS, ROWS = 10, 20
 FPS = 60
-new_highscore = False
+player_name = ''
 
 
 #Config für Musik (und weiteres in Zukunft)
@@ -46,11 +47,10 @@ if not os.path.isfile("config.txt"):
         datei.write("0.5")
         datei.write("0.5")
 
-#File für Scores
-if not os.path.isfile("Scores.txt.enc"):
-    with open("Scores.txt", "w") as datei:
-        print("Score erstellt")
 
+if not os.path.isfile("Scores.txt"):
+    with open("Scores.txt", "w") as datei:
+        pass
 
 # Verschlüsselung der Scores
 # Schlüssel generieren und speichern
@@ -90,18 +90,20 @@ def decrypt_file(encrypted_filename, output_filename):
     with open(output_filename, "wb") as file:
         file.write(decrypted_data)
 
-if os.path.isfile("Scores.txt"):
+
+# Schlüssel nur generieren wenn keine Scores offline & verschlüsselt gespeichert wurden
+if not os.path.isfile("Scores.enc.txt"):
     generate_key()
     encrypt_file("Scores.txt")
 
 
-# Musik
-#Einstellungen importieren
+# Einstellungen importieren
 with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
     sfx_volume = float(datei.readline().strip())
 
+# Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
 pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
 pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
@@ -135,9 +137,9 @@ clock = pygame.time.Clock()
 state = "MENU"
 previous_state = ''
 
-font = pygame.font.Font("game_design\Pixel_Emulator.otf", 40)
-small_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 24)
-big_font = pygame.font.Font("game_design\Pixel_Emulator.otf", 64)
+font = pygame.font.Font(r"game_design\Pixel_Emulator.otf", 40)
+small_font = pygame.font.Font(r"game_design\Pixel_Emulator.otf", 24)
+big_font = pygame.font.Font(r"game_design\Pixel_Emulator.otf", 64)
 
 # Shapes and Colors
 SHAPES = {
@@ -234,10 +236,29 @@ def change_music_track(delta):
     pygame.mixer.music.play(-1, 0.0)
     update_config()
 
+def refresh_leaderboard():
+    global getting_scores
+    getting_scores = True
+
 def show_leaderboard():
-    global state
+    global state, getting_scores, is_online
     state = "LEADERBOARD"
     leaderboard = {}
+    
+    # Scores von Server laden und verschlüsselt speichern
+    while getting_scores:
+        draw_text_centered(f"Loading...", HEIGHT // 2)
+        pygame.display.flip()
+        is_online = bool(sql_db.get_scores())
+        if is_online:
+            encrypt_file("Scores.txt")
+        getting_scores = False
+
+    # Ansonsten lokal gespeicherte Scores verwenden
+    if not is_online:
+        draw_text_centered("OFFLINE", 100, WIDTH -150, colour=(255,0,0))
+    
+
     decrypt_file("Scores.txt.enc", "Scores.txt")
 
     with open("Scores.txt", "r") as datei:
@@ -257,22 +278,18 @@ def show_leaderboard():
                 if name not in leaderboard or score > leaderboard[name]:
                     leaderboard[name] = score    
     
+    encrypt_file("Scores.txt")
+
     # Sortieren
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
     
     # Ausgeben
     line_height = 1
-    player_names = list(leaderboard.keys())
     for i in range (5):
         if i < len(sorted_leaderboard):
             draw_text_centered(f"{i+1}. {sorted_leaderboard[i][0]}: {sorted_leaderboard[i][1]}", 100*line_height, None, "game_design\\Border.png", WHITE)
         line_height += 1
     
-    # Datei korrigiert überschreiben
-    with open("Scores.txt", "w") as datei:
-        for name, score in leaderboard.items():
-            datei.write(f"{name}: {score}\n")
-    encrypt_file("Scores.txt")
         
 
 
@@ -287,6 +304,7 @@ def get_menu_buttons(width, height):
 def get_leaderboard_UI(width, height):
     return [
         Button("Back", 0, height // 2 + 300, 150, 80, go_back),
+        Button("Refresh", WIDTH-250, 200, 200, 80, refresh_leaderboard),
     ]
 
 def get_options_UI(width, height):
@@ -334,6 +352,9 @@ next_queue = []
 used_hold = False
 previous_shape = None
 shape_bag = []
+new_highscore = False
+getting_scores = True
+is_online = True
 
 
 def delay(milsec):
@@ -647,6 +668,10 @@ def start_game():
     reset_game()
     global state
     state = "GAME"
+    # Scores von Server laden, um im Game richtigen Highscore zu laden
+    if sql_db.get_scores():
+        encrypt_file("Scores.txt")
+    
 
 def return_to_menu():
     global state
@@ -654,7 +679,7 @@ def return_to_menu():
 
 def resume_game():
     global state
-    state ="GAME"
+    state = "GAME"
 
 
 # Buttons
@@ -858,6 +883,7 @@ while running:
             running = False
 
         if state == "MENU":
+            getting_scores = True # Für Online-Leaderboard
             for btn in get_menu_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
             previous_state = "MENU"
@@ -914,7 +940,8 @@ while running:
                 btn.handle_event(event)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    state = "GAME"   
+                    state = "GAME"
+
         elif state == "GAME_OVER":
             for btn in get_game_over_buttons(WIDTH, HEIGHT):
                 btn.handle_event(event)
@@ -922,23 +949,23 @@ while running:
                 if event.key == pygame.K_ESCAPE:
                     state = "MENU"
 
-    if state == "GAME":
-        if lock_pending:
-            if pygame.time.get_ticks() - lock_timer >= lock_delay:
-                # Only merge if the piece cannot move down
-                if not valid_position(current_piece, dy=1):
-                    merge_piece(current_piece)
-                    clear_lines()
-                    current_piece = next_queue.pop(0)
-                    next_queue.append(create_piece())
-                    used_hold = False
-                    lock_pending = False
-                    if not valid_position(current_piece):
-                        pygame.time.delay(500)
-                        game_over()
-                else:
-                    # Reset lock timer if still able to fall
-                    lock_pending = False   
+        if state == "GAME":
+            if lock_pending:
+                if pygame.time.get_ticks() - lock_timer >= lock_delay:
+                    # Only merge if the piece cannot move down
+                    if not valid_position(current_piece, dy=1):
+                        merge_piece(current_piece)
+                        clear_lines()
+                        current_piece = next_queue.pop(0)
+                        next_queue.append(create_piece())
+                        used_hold = False
+                        lock_pending = False
+                        if not valid_position(current_piece):
+                            pygame.time.delay(500)
+                            game_over()
+                    else:
+                        # Reset lock timer if still able to fall
+                        lock_pending = False   
                 
         
         elif state == "ENTER_NAME":
@@ -947,12 +974,18 @@ while running:
             previous_state = "GAME_OVER"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    print("Saved Score")
                     decrypt_file("Scores.txt.enc", "Scores.txt")
                     # Score speichern
                     with open("Scores.txt","a") as datei:
                         datei.write(f"{player_name.upper()}: {score}\n")
-                        decrypt_file("Scores.txt.enc", "Scores.txt")            
+                        decrypt_file("Scores.txt.enc", "Scores.txt")
                     encrypt_file("Scores.txt")
+
+                    #Versuchen Score auf Server hoch zu laden
+                    if not sql_db.add_score(player_name, score):
+                        continue
+                    
                     player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:

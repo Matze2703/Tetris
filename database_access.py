@@ -1,6 +1,6 @@
 import requests
 
-# URL deiner API
+# URL der API
 url = "http://tetrispi.duckdns.org/score?sortiert=true"
 
 
@@ -13,13 +13,19 @@ def get_scores():
 
         if not scores:
             print("Keine Scores gefunden.")
-            return
+            return 0
 
         print("Scores:")
-        for entry in scores:
-            print(f"Nr: {entry.get('nr', '-')}, Name: {entry.get('name')}, Score: {entry.get('score')}")
+        with open("Scores.txt","w") as datei:
+            for entry in scores:
+                datei.write(f"{entry.get('name')}: {entry.get('score')}\n")
+                print(f"Nr: {entry.get('nr', '-')}, Name: {entry.get('name')}, Score: {entry.get('score')}")
+        
+        return 1
+
     except requests.RequestException as e:
         print(f"Fehler beim Abrufen der Scores: {e}")
+        return 0    
 
 
 def add_score(name, score):
@@ -29,13 +35,16 @@ def add_score(name, score):
         response.raise_for_status()
 
         print("Score erfolgreich hochgeladen:", response.json())
+        return 1
+    
     except requests.RequestException as e:
         print(f"Fehler beim Hochladen des Scores: {e}")
+        return 0
 
 
 if __name__ == "__main__":
     
     # Beispiel zum Hochladen eines Scores
-    add_score("Test2", 2345)
+    #add_score("Test4", 444)
 
     get_scores()
