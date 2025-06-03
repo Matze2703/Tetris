@@ -23,7 +23,7 @@
 
 """
 
-import pygame, sys, random, os
+import pygame, sys, random, os, time
 from cryptography.fernet import Fernet
 import database_access as sql_db
 pygame.init()
@@ -95,7 +95,6 @@ def decrypt_file(encrypted_filename, output_filename):
 if not os.path.isfile("Scores.enc.txt"):
     generate_key()
     encrypt_file("Scores.txt")
-
 
 # Einstellungen importieren
 with open("config.txt", "r") as datei:
@@ -236,6 +235,7 @@ def change_music_track(delta):
     pygame.mixer.music.play(-1, 0.0)
     update_config()
 
+
 def refresh_leaderboard():
     global getting_scores
     getting_scores = True
@@ -249,8 +249,15 @@ def show_leaderboard():
     while getting_scores:
         draw_text_centered(f"Loading...", HEIGHT // 2)
         pygame.display.flip()
-        is_online = bool(sql_db.get_scores())
+        is_online = sql_db.get_scores()
         if is_online:
+            # lokal gespeicherte Scores abgleichen und hochladen
+            if os.path.isfile("not_uploaded.txt.enc"):
+                # Logik fürs abgleichen
+                print("Uploading local scores...")
+                decrypt_file("not_uploaded.txt.enc", "not_uploaded.txt")
+                sql_db.update_scores()
+
             encrypt_file("Scores.txt")
         getting_scores = False
 
@@ -353,8 +360,21 @@ used_hold = False
 previous_shape = None
 shape_bag = []
 new_highscore = False
+highscore = 0
+
+# --- Lock delay variables ---
+lock_delay = 300 - level*10 # milliseconds
+lock_timer = None
+lock_pending = False
+
+# --- online Leaderboard ---
 getting_scores = True
 is_online = True
+
+# --- Soft Drop ---
+soft_drop_active = False
+s_pressed_time = None  # Zeitpunkt, an dem "S" gedrückt wurde
+LONG_PRESS_THRESHOLD = 0.5  # Schwelle in Sekunden für langes Drücken
 
 
 def delay(milsec):
@@ -438,9 +458,6 @@ def valid_position(piece, dx=0, dy=0, rotated=None):
                     return False
     return True
 
-
-
-
 def merge_piece(piece):
     for y, row in enumerate(piece['matrix']):
         for x, cell in enumerate(row):
@@ -485,9 +502,11 @@ def clear_lines():
             # Board aktualisieren
             pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
             draw_board(offset_x, offset_y)
-            draw_text_centered(f"Score: {score}", 450, WIDTH // 2 +300 +10*len(str(score)))
-            draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300)
-            draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300)
+            draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
+            draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
+            draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
+            draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
+            draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
             draw_next_pieces()
             draw_hold_piece()
             pygame.display.update()
@@ -523,14 +542,8 @@ def clear_lines():
     board = new_board
     
         
-
-# --- Lock delay variables ---
-lock_delay = 300 - level*10 # milliseconds
-lock_timer = None
-lock_pending = False
-
 def move_piece(dx, dy):
-    global lock_timer, lock_pending
+    global lock_timer, lock_pending, current_piece
     if valid_position(current_piece, dx, dy):
         current_piece['x'] += dx
         current_piece['y'] += dy
@@ -548,13 +561,44 @@ def drop_piece():
             lock_pending = True
 
 def soft_drop():
-    global current_piece, used_hold, lock_timer, lock_pending, score
-    if not move_piece(0, 1):
-        if not lock_pending:
-            lock_timer = pygame.time.get_ticks()
-            lock_pending = True
-    if valid_position(current_piece, 0, 1):
-        score += 1      
+    global current_piece, used_hold, lock_timer, lock_pending, score, soft_drop_active
+    drops = 0
+    while valid_position(current_piece, 0, 1) and soft_drop_active:
+        # Tetromino moven + Score
+        move_piece(0, 1)
+        drops += 1
+
+        # Soft Drop durch beliebige andere Aktion abbrechen
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if soft_drop_active and event.key != pygame.K_ESCAPE:
+                    drops = 0
+                    soft_drop_active = False
+        
+        # Board aktualisieren
+        pygame.draw.rect(screen, BLACK, (offset_x, offset_y, GAME_WIDTH, GAME_HEIGHT))
+        draw_board(offset_x, offset_y)
+        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
+        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
+        draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
+        draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
+        draw_piece(get_ghost_piece(current_piece), offset_x, offset_y, ghost=True)
+        draw_piece(current_piece, offset_x, offset_y)
+        draw_next_pieces()
+        draw_hold_piece()
+        pygame.display.update()
+        pygame.time.delay(50)  # Pause pro Schritt
+    
+    soft_drop_active = False
+    popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
+    popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 280
+    if drops:
+        lock_timer = pygame.time.get_ticks()
+        lock_pending = True
+        score += drops
+        score_popup.append(ScorePopup(f"Soft Drop", popup_x, popup_y))
+        score_popup.append(ScorePopup(f"+{drops} pts", popup_x, popup_y +30))
 
 def hard_drop():
     global score, lock_pending, used_hold, current_piece
@@ -564,8 +608,9 @@ def hard_drop():
     score += drops * 2
     popup_x = WIDTH // 2 + GAME_WIDTH // 2 - 540
     popup_y = HEIGHT // 2 - GAME_HEIGHT // 2 + 280
-    score_popup.append(ScorePopup(f"Hard Drop", popup_x, popup_y))
-    score_popup.append(ScorePopup(f"+{drops * 2} pt#s", popup_x, popup_y +30))
+    if drops:
+        score_popup.append(ScorePopup(f"Hard Drop", popup_x, popup_y))
+        score_popup.append(ScorePopup(f"+{drops * 2} pts", popup_x, popup_y +30))
     # Immediately lock and merge the piece, skip lock delay
     merge_piece(current_piece)
     clear_lines()
@@ -605,6 +650,12 @@ def hold_current_piece():
         hold_piece, current_piece = current_piece, hold_piece
     current_piece['x'] = COLS // 2 - len(current_piece['matrix'][0]) // 2
     current_piece['y'] = 0
+
+
+
+#############
+# RENDERING #
+#############
 
 def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
     matrix = piece['matrix']
@@ -657,49 +708,6 @@ def draw_hold_piece():
         draw_piece_in_box(hold_piece, x_offset, y_offset, 1)
 
     draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
-
-
-# Game states
-def game_over():
-    global state
-    state = "GAME_OVER"
-
-def start_game():
-    reset_game()
-    global state
-    state = "GAME"
-    # Scores von Server laden, um im Game richtigen Highscore zu laden
-    if sql_db.get_scores():
-        encrypt_file("Scores.txt")
-    
-
-def return_to_menu():
-    global state
-    state = "MENU"
-
-def resume_game():
-    global state
-    state = "GAME"
-
-
-# Buttons
-menu_buttons = [
-    Button("Start Game", WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50, start_game)
-]
-pause_buttons = [
-    Button("Continue", WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 50, resume_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 50, return_to_menu),
-]
-game_over_buttons = [
-    Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
-    Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
-]
-
-
-
-##########
-# DESIGN #
-##########
 
 def draw_board(offset_x, offset_y):
     for y in range(ROWS):
@@ -921,7 +929,9 @@ while running:
                         lock_timer = pygame.time.get_ticks()
                         play_sound("move.mp3")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    soft_drop()
+                    # Zeitpunkt des Drückens für Softdrop speichern
+                    s_pressed_time = time.time()
+                
                 #Besseres Rotate
                 if event.key in (pygame.K_q, pygame.K_e, pygame.K_w, pygame.K_UP):
                     play_sound("rotate.mp3")
@@ -934,22 +944,21 @@ while running:
                 elif event.key == pygame.K_f:
                     hold_current_piece()
 
-        
-        elif state == "PAUSE":
-            for btn in get_pause_buttons(WIDTH, HEIGHT):
-                btn.handle_event(event)
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    state = "GAME"
+            # Richtiger Soft Drop
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_s and s_pressed_time is not None:
+                    duration = time.time() - s_pressed_time
+                    if duration >= LONG_PRESS_THRESHOLD:
+                        # Soft Drop durch gedrückt halten (0.5s) aktivieren
+                        soft_drop_active = True
+                    else:
+                        drop_piece()
+                    s_pressed_time = None
+            
+            # Soft Drop ausführen, wenn aktiv
+            if soft_drop_active:
+                soft_drop()
 
-        elif state == "GAME_OVER":
-            for btn in get_game_over_buttons(WIDTH, HEIGHT):
-                btn.handle_event(event)
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    state = "MENU"
-
-        if state == "GAME":
             if lock_pending:
                 if pygame.time.get_ticks() - lock_timer >= lock_delay:
                     # Only merge if the piece cannot move down
@@ -965,8 +974,21 @@ while running:
                             game_over()
                     else:
                         # Reset lock timer if still able to fall
-                        lock_pending = False   
-                
+                        lock_pending = False
+        
+        elif state == "PAUSE":
+            for btn in get_pause_buttons(WIDTH, HEIGHT):
+                btn.handle_event(event)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    state = "GAME"
+
+        elif state == "GAME_OVER":
+            for btn in get_game_over_buttons(WIDTH, HEIGHT):
+                btn.handle_event(event)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    state = "MENU"                
         
         elif state == "ENTER_NAME":
             for btn in get_enter_name_buttons(WIDTH, HEIGHT):
@@ -974,18 +996,31 @@ while running:
             previous_state = "GAME_OVER"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    print("Saved Score")
                     decrypt_file("Scores.txt.enc", "Scores.txt")
-                    # Score speichern
+                    
+                    # Lokal speichern für Leaderboard
                     with open("Scores.txt","a") as datei:
                         datei.write(f"{player_name.upper()}: {score}\n")
                         decrypt_file("Scores.txt.enc", "Scores.txt")
                     encrypt_file("Scores.txt")
 
-                    #Versuchen Score auf Server hoch zu laden
-                    if not sql_db.add_score(player_name, score):
-                        continue
+                    # Lokal speichern für Backup
+                    if os.path.isfile("not_uploaded.txt.enc"):
+                        decrypt_file("not_uploaded.txt.enc", "not_uploaded.txt")
+                        with open("not_uploaded.txt","a") as datei:
+                            datei.write(f"{player_name.upper()}: {score}\n")
+                    else:
+                        with open("not_uploaded.txt","w") as datei:
+                            datei.write(f"{player_name.upper()}: {score}\n")
                     
+                    #Versuchen Score auf Server hoch zu laden
+                    if sql_db.get_scores():
+                        sql_db.update_scores()
+                    encrypt_file("Scores.txt")
+                    # Wenn nicht hochgeladen, Backup verschlüsseln um Cheating zu verhindern
+                    if os.path.isfile("not_uploaded.txt"):
+                        encrypt_file("not_uploaded.txt")
+
                     player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
@@ -1032,7 +1067,6 @@ while running:
         # aktuellen Highscore herausfinden
         decrypt_file("Scores.txt.enc", "Scores.txt")
         with open("Scores.txt", "r") as datei:
-            highscore = 0
             for line in datei:
                 line = line.strip()
                 name = ''
