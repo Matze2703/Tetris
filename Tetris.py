@@ -958,23 +958,6 @@ while running:
             # Soft Drop ausführen, wenn aktiv
             if soft_drop_active:
                 soft_drop()
-
-            if lock_pending:
-                if pygame.time.get_ticks() - lock_timer >= lock_delay:
-                    # Only merge if the piece cannot move down
-                    if not valid_position(current_piece, dy=1):
-                        merge_piece(current_piece)
-                        clear_lines()
-                        current_piece = next_queue.pop(0)
-                        next_queue.append(create_piece())
-                        used_hold = False
-                        lock_pending = False
-                        if not valid_position(current_piece):
-                            pygame.time.delay(500)
-                            game_over()
-                    else:
-                        # Reset lock timer if still able to fall
-                        lock_pending = False
         
         elif state == "PAUSE":
             for btn in get_pause_buttons(WIDTH, HEIGHT):
@@ -996,13 +979,11 @@ while running:
             previous_state = "GAME_OVER"
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    decrypt_file("Scores.txt.enc", "Scores.txt")
                     
                     # Lokal speichern für Leaderboard
+                    decrypt_file("Scores.txt.enc", "Scores.txt")
                     with open("Scores.txt","a") as datei:
                         datei.write(f"{player_name.upper()}: {score}\n")
-                        decrypt_file("Scores.txt.enc", "Scores.txt")
-                    encrypt_file("Scores.txt")
 
                     # Lokal speichern für Backup
                     if os.path.isfile("not_uploaded.txt.enc"):
@@ -1016,11 +997,11 @@ while running:
                     #Versuchen Score auf Server hoch zu laden
                     if sql_db.get_scores():
                         sql_db.update_scores()
-                    encrypt_file("Scores.txt")
                     # Wenn nicht hochgeladen, Backup verschlüsseln um Cheating zu verhindern
                     if os.path.isfile("not_uploaded.txt"):
                         encrypt_file("not_uploaded.txt")
 
+                    encrypt_file("Scores.txt")
                     player_name = ''
                     state = "GAME_OVER"
                 elif event.key == pygame.K_BACKSPACE:
@@ -1037,6 +1018,24 @@ while running:
     if state == "GAME" and now - fall_time > fall_speed:
         drop_piece()
         fall_time = now
+    
+    if state == "GAME":
+        if lock_pending:
+            if pygame.time.get_ticks() - lock_timer >= lock_delay:
+                # Only merge if the piece cannot move down
+                if not valid_position(current_piece, dy=1):
+                    merge_piece(current_piece)
+                    clear_lines()
+                    current_piece = next_queue.pop(0)
+                    next_queue.append(create_piece())
+                    used_hold = False
+                    lock_pending = False
+                    if not valid_position(current_piece):
+                        pygame.time.delay(500)
+                        game_over()
+                else:
+                    # Reset lock timer if still able to fall
+                    lock_pending = False
 
     offset_x = WIDTH // 2 - GAME_WIDTH // 2
     offset_y = HEIGHT // 2 - GAME_HEIGHT // 2

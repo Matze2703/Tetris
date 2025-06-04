@@ -106,7 +106,7 @@ def update_scores():
 if __name__ == "__main__":
     
     # Beispiel zum Hochladen eines Scores
-    #add_score("MATZE", 1)
+    #add_score("Test4", 444)
     
     # Löschen eines Scores
     #delete_score("MATZE")
