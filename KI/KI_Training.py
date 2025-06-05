@@ -48,7 +48,7 @@ class ReplayBuffer:
 
 
 def train():
-    episodes = int(input("Trainingsepisoden: "))
+    episodes = int(input("\nTrainingsepisoden: "))
     batch_size = 64
     gamma = 0.99
     epsilon = 1.0
@@ -79,6 +79,8 @@ def train():
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_episode = checkpoint["episode"] + 1
         print(f"Modell geladen, fortsetzen bei Episode {start_episode}")
+    else:
+        print("Kein Modell gefunden")
 
     for episode in trange(start_episode, start_episode + episodes, desc="Tetris Training"):
         obs, _ = env.reset()
@@ -125,12 +127,18 @@ def train():
         episode_scores.append(total_reward)
         epsilon = max(epsilon * epsilon_decay, epsilon_min)
 
-    torch.save(model.state_dict(), model_path)
-    print("Finales Modell gespeichert als Tetris_DQN.pth")
+    #Speichern des Modells
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "episode": start_episode + episodes - 1
+    }, model_path)
+
+    print(f"Finales Modell gespeichert als {model_path}")
 
     df = pd.DataFrame(episode_scores, columns=["score"])
     df.to_csv(csv_path, index=False)
-    print("Alle Scores gespeichert in tetris_scores.csv")
+    print(f"Alle Scores gespeichert in {csv_path}")
 
     if os.path.exists(csv_path):
         df_all = pd.read_csv(csv_path)
@@ -148,7 +156,7 @@ def train():
         print(f"Durchschnittsscore: {sum(all_scores) / len(all_scores):.2f}")
         print(f"Höchster Score: {max(all_scores)}")
     else:
-        print("Warnung: Keine tetris_scores.csv gefunden zum Plotten.")
+        print(f"Warnung: Keine {csv_path} gefunden zum Plotten.")
 
     # Vorzeigerunde
     obs, _ = env.reset()

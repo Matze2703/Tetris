@@ -38,6 +38,9 @@ class TetrisEnv(gym.Env):
 
         self.action_space = spaces.Discrete(6)  # 0: nichts, 1: links, 2: rechts, 3: runter, 4: drehen, 5: harter Drop
         self.observation_space = spaces.Box(low=0, high=1, shape=(ROWS, COLS), dtype=np.float32)
+        self.ticks = 0
+        self.fall_interval = 1  # Alle x ticks ein automatischer Fall
+
 
         self.current_piece = None
         self.piece_x = 0
@@ -114,36 +117,47 @@ class TetrisEnv(gym.Env):
         terminated = False
         truncated = False
 
+        # Spieleraktion
         if action == 1:  # links
             if self._valid_position(self.current_piece, self.piece_x - 1, self.piece_y):
                 self.piece_x -= 1
         elif action == 2:  # rechts
             if self._valid_position(self.current_piece, self.piece_x + 1, self.piece_y):
                 self.piece_x += 1
-        elif action == 3:  # runter
+        elif action == 3:  # runter (Soft Drop)
             if self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
             else:
                 self._lock_piece()
-
         elif action == 4:  # drehen
             rotated = list(zip(*self.current_piece[::-1]))
             rotated = [list(row) for row in rotated]
             if self._valid_position(rotated, self.piece_x, self.piece_y):
                 self.current_piece = rotated
-
-        elif action == 5:  # Harddrop
+        elif action == 5:  # Hard Drop
             while self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
             self._lock_piece()
             reward += 10
 
+        # Automatischer Fall
+        self.ticks += 1
+        if self.ticks >= self.fall_interval:
+            self.ticks = 0
+            if self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
+                self.piece_y += 1
+            else:
+                self._lock_piece()
+                reward += 10
+
+        # Game Over prüfen
         if not self._valid_position(self.current_piece, self.piece_x, self.piece_y):
             terminated = True
-            reward -= 10
+            reward -= 100
 
         obs = self._get_obs()
         return obs, reward, terminated, truncated, {}
+
 
     def render(self, mode="human"):
         if self.skip_render:
