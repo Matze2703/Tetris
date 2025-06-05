@@ -23,7 +23,24 @@
 
 """
 
-import pygame, sys, random, os, time
+import importlib.util
+import subprocess
+import sys
+
+def install_and_import(package_name):
+    if importlib.util.find_spec(package_name) is None:
+        print(f"Modul '{package_name}' nicht gefunden. Installiere...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+# Alle Module installieren
+required_modules = ["requests", "os", "random","time","cryptography","pygame"]
+
+for module in required_modules:
+    install_and_import(module)
+
+
+
+import pygame, random, os, time
 from cryptography.fernet import Fernet
 import database_access as sql_db
 pygame.init()
@@ -45,17 +62,14 @@ if not os.path.isfile("config.txt"):
     with open("config.txt", "w") as datei:
         print("config erstellt")
         datei.write("1\n")
-        datei.write("0.5")
+        datei.write("0.5\n")
         datei.write("0.5")
 
-
-if not os.path.isfile("Scores.txt"):
-    with open("Scores.txt", "w") as datei:
-        pass
 
 # Verschlüsselung der Scores
 # Schlüssel generieren und speichern
 def generate_key():
+    print("Neuer Key erstellt")
     key = Fernet.generate_key()
     with open("schluessel.key", "wb") as key_file:
         key_file.write(key)
@@ -92,10 +106,17 @@ def decrypt_file(encrypted_filename, output_filename):
         file.write(decrypted_data)
 
 
-# Schlüssel nur generieren wenn keine Scores offline & verschlüsselt gespeichert wurden
-if not os.path.isfile("Scores.enc.txt"):
+# Schlüssel nur generieren wenn noch keiner vorhanden
+if not os.path.isfile("schluessel.key"):
     generate_key()
+    
+# Verschlüsseln der neuen Scores Datei, wenn sie vorher noch nicht vorhanden war
+if not os.path.isfile("Scores.txt") and not os.path.isfile("Scores.txt.enc"):
+    print("Neue Score-Datei erstellt")
+    with open("Scores.txt", "w") as datei:
+        pass
     encrypt_file("Scores.txt")
+    
 
 # Einstellungen importieren
 with open("config.txt", "r") as datei:
@@ -260,6 +281,7 @@ def show_leaderboard():
         pygame.display.flip()
         is_online = sql_db.get_scores()
         if is_online:
+            print("Connected to Server")
             # lokal gespeicherte Scores abgleichen und hochladen
             if os.path.isfile("not_uploaded.txt.enc"):
                 # Logik fürs abgleichen

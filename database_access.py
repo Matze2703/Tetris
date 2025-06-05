@@ -15,13 +15,13 @@ def get_scores():
             print("Keine Scores gefunden.")
             return 1
 
-        print("Scores:")
-        with open("Scores.txt","w") as datei:
-            for entry in scores:
-                datei.write(f"{entry.get('name')}: {entry.get('score')}\n")
-                print(f"Nr: {entry.get('nr', '-')}, Name: {entry.get('name')}, Score: {entry.get('score')}")
-        
-        return 1
+        elif scores:
+            print("Scores:")
+            with open("Scores.txt","w") as datei:
+                for entry in scores:
+                    datei.write(f"{entry.get('name')}: {entry.get('score')}\n")
+                    print(f"Nr: {entry.get('nr', '-')}, Name: {entry.get('name')}, Score: {entry.get('score')}")
+            return 1
 
     except requests.RequestException as e:
         print(f"Fehler beim Abrufen der Scores: {e}")
