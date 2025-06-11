@@ -62,7 +62,8 @@ if not os.path.isfile("config.txt"):
         print("config erstellt")
         datei.write("1\n")
         datei.write("0.5\n")
-        datei.write("0.5")
+        datei.write("0.5\n")
+        datei.write("False\n")
 
 
 # Verschlüsselung der Scores
@@ -122,6 +123,7 @@ with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
     sfx_volume = float(datei.readline().strip())
+    fullscreen = datei.readline().strip()
 
 # Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
@@ -318,8 +320,11 @@ def show_leaderboard():
         if i < len(sorted_leaderboard):
             draw_text_centered(f"{i+1}. {sorted_leaderboard[i][0]}: {sorted_leaderboard[i][1]}", 100*line_height, None, "game_design\\Border.png", WHITE)
         line_height += 1
-    
-        
+
+def toggle_fullscreen():
+    pygame.display.toggle_fullscreen()
+
+
 
 
 #Platzierung der Buttons korrigieren
@@ -345,6 +350,7 @@ def get_options_UI(width, height):
         Button("<", width // 2 -250, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", -0.05)),
         Button(">", width // 2 +170, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", +0.05)),
         Button("Back", width // 2 -300, height // 2 +300, 150, 80, go_back),
+        Button("Toggle Fullscreen",  width // 2 - 70, height // 2 +170, 150, 80, toggle_fullscreen),
     ]
 
 def get_pause_buttons(width, height):
