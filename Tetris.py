@@ -885,8 +885,8 @@ skip_intro = 0
 
 MENU_LOGO = " TETRIS "
 MENU_LOGO_FONT_SIZE = 80
-MENU_TRANSITION_BASE_SPEED = 40  # ms per char
-MENU_TRANSITION_VARIANCE = 60    # ms random extra per char
+MENU_TRANSITION_BASE_SPEED = 100  # ms per char
+MENU_TRANSITION_VARIANCE = 40    # ms random extra per char
 menu_transition_active = False
 menu_transition_start_time = 0
 menu_transition_chars = []
@@ -1204,19 +1204,23 @@ while running:
         # Draw buttons only during animation, not after (no border for animated text)
         all_done = True
         if not menu_transition_done:
+            # Recalculate button positions every frame for animation
+            animated_buttons = get_menu_buttons(WIDTH, HEIGHT)
             for i, (btn, btn_times) in enumerate(menu_transition_chars[1:]):
                 chars = [c for c, t in btn_times if elapsed_anim >= t]
                 if len(chars) < len(btn.text):
                     all_done = False
                 if chars:
-                    # Draw border for animated button text
+                    # Use the current position from the recalculated button
+                    anim_btn = animated_buttons[i]
                     draw_text_centered(
                         "".join(chars),
-                        btn.rect.centery,
-                        btn.rect.centerx,
+                        anim_btn.rect.centery,
+                        anim_btn.rect.centerx,
                         "game_design\\Border_2.png"
                     )
         menu_transition_done = all_done and menu_fade_alpha == 255
+
         # Only allow button interaction and draw full buttons after animation is done
         if menu_transition_done:
             for btn in menu_buttons:
@@ -1266,7 +1270,7 @@ while running:
             highscore = score
             if not new_highscore:
                 play_sound("new_record.mp3")
-                score_popup.append(ScorePopup("!! NEW HIGHSCORE !!", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
+                score_popup.append(ScorePopup(" NEW HIGHSCORE ", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
                 new_highscore = True
         draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
 
