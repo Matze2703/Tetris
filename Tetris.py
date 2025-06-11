@@ -124,7 +124,8 @@ with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
     sfx_volume = float(datei.readline().strip())
-    fullscreen = datei.readline().strip()
+    fullscreen = bool(datei.readline().strip())
+
 
 # Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
@@ -143,7 +144,8 @@ def update_config():
     with open("config.txt", "w") as datei:
         datei.write(f"{selected_track}\n")
         datei.write(f"{music_volume}\n")
-        datei.write(f"{sfx_volume}")
+        datei.write(f"{sfx_volume}\n")
+        datei.write(f"{fullscreen}\n")
 
 
 WHITE = (255, 255, 255)
@@ -153,6 +155,8 @@ DARKGREY = (50, 50, 50)
 YELLOW = (242, 255, 0)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+if fullscreen:
+    pygame.display.toggle_fullscreen()
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
@@ -331,7 +335,10 @@ def show_leaderboard():
         line_height += 1
 
 def toggle_fullscreen():
+    global fullscreen
     pygame.display.toggle_fullscreen()
+    fullscreen = not fullscreen
+    update_config()
 
 
 
