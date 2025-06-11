@@ -837,7 +837,7 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
     surface.blit(txt_surface, txt_rect)
 
 
-bg_tile = pygame.image.load("game_design\\Background.png").convert()
+bg_tile = pygame.image.load("game_design\\Background-n.png").convert()
 tile_width, tile_height = bg_tile.get_size()
 
 def draw_background():
@@ -881,6 +881,8 @@ menu_fade_alpha = 0
 menu_fade_start_time = None
 menu_fade_duration = 1000  # milliseconds (1 second)
 
+skip_intro = 0
+
 MENU_LOGO = " TETRIS "
 MENU_LOGO_FONT_SIZE = 80
 MENU_TRANSITION_BASE_SPEED = 40  # ms per char
@@ -915,6 +917,7 @@ def start_menu_transition(buttons):
         menu_transition_chars.append((btn, btn_times))
 
 
+
 while running:
     update_GUI()
     clock.tick(FPS)
@@ -930,6 +933,7 @@ while running:
             alpha = int(255 * ((bootup_duration - elapsed) / fade_duration))
         else:
             alpha = 255
+
         # Draw black background
         screen.fill((0, 0, 0))
         # Render text surface
@@ -945,15 +949,14 @@ while running:
         
         pygame.display.flip()
         # After bootup_duration ms, switch to MENU
-        if elapsed >= bootup_duration:
+        if elapsed >= bootup_duration or skip_intro == 1:
             state = "MENU"
             previous_state = "MENU"
             menu_fade_alpha = 0
             menu_fade_start_time = pygame.time.get_ticks()
-        continue  # Skip the rest of the loop for this frame
 
-    # Handle GAME_OVER blinking
-    if state == "GAME_OVER":
+    # Handle GAME_OVER and PAUSE blinking
+    if state in ("GAME_OVER", "PAUSE"):
         game_over_blink_timer += clock.get_time()
         if game_over_blink_timer > 500:  # Blink every 500ms
             game_over_blink_visible = not game_over_blink_visible
@@ -962,6 +965,14 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+        if state == "BOOTUP_SEQUENCE":
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE or pygame.K_SPACE:
+
+                        skip_intro = 1
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    skip_intro = 1
 
         if state == "MENU":
             getting_scores = True # Für Online-Leaderboard
@@ -1268,7 +1279,10 @@ while running:
 
     
     elif state == "PAUSE":
-        draw_text_centered(" PAUSED ", 200, None, "game_design\\Border.png", (30, 30, 150))
+        if game_over_blink_visible:
+            draw_text_centered(" PAUSED ", 200, None, "game_design\\Border.png", (30, 30, 150))
+        else:
+            draw_text_centered(" PAUSED ", 200, None, "game_design\\Border.png", (0, 0, 0))
         for btn in get_pause_buttons(WIDTH, HEIGHT):
             btn.draw(screen)
     
