@@ -357,6 +357,9 @@ def toggle_fullscreen():
     fullscreen = not fullscreen
     update_config()
 
+def quit_game():
+    pygame.quit()
+    sys.exit()
 
 
 
@@ -366,6 +369,7 @@ def get_menu_buttons(width, height):
         Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
         Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, go_to_options),
         Button("Leaderboard", width // 2 - 100, height // 2 + 200, 200, 50, show_leaderboard),
+        Button("QUIT", width // 2 - 100, height // 2 + 300, 200, 50, quit_game)
     ]
 
 def get_leaderboard_UI(width, height):
