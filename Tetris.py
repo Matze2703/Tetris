@@ -125,7 +125,7 @@ with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
     sfx_volume = float(datei.readline().strip())
-    fullscreen = bool(datei.readline().strip())
+    fullscreen = datei.readline().strip().lower() == "true"
     bg_nr = int(datei.readline().strip())
 
 # Musik
@@ -1348,6 +1348,7 @@ while running:
             (f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, 30),
             (f"Highscore:", 600, WIDTH // 2 -300, 30),
             (f"{highscore}", 670, WIDTH // 2 -300, 40),
+            (f"i dont get paid enough for this shit", HEIGHT //2, WIDTH //2,15),
         ]
         palette = [
             (0, 174, 239),   # cyan
@@ -1402,12 +1403,14 @@ while running:
                         cx += surf.get_width()
             if elapsed_anim >= ingame_ui_anim_duration:
                 ingame_ui_anim_active = False
+                
         else:
             draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
             draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
             draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
             draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
             draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
+            
 
         draw_next_pieces()
         draw_hold_piece()
