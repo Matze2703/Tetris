@@ -10,21 +10,27 @@ COLS = 10
 
 # Tetromino-Formen
 TETROMINOS = {
-    'I': [[1, 1, 1, 1]],
+    'I': [[1],
+          [1],
+          [1],
+          [1],],
     'O': [[1, 1],
           [1, 1]],
     'T': [[0, 1, 0],
           [1, 1, 1]],
-    'S': [[0, 1, 1],
-          [1, 1, 0]],
-    'Z': [[1, 1, 0],
-          [0, 1, 1]],
-    'J': [[1, 0, 0],
-          [1, 1, 1]],
-    'L': [[0, 0, 1],
-          [1, 1, 1]],
+    'S': [[1, 0],
+          [1, 1],
+          [0, 1]],
+    'Z': [[0, 1],
+          [1, 1],
+          [1, 0]],
+    'J': [[0, 1],
+          [0, 1],
+          [1, 1]],
+    'L': [[1, 0],
+          [1, 0],
+          [1, 1]],
 }
-
 
 class TetrisEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -35,14 +41,16 @@ class TetrisEnv(gym.Env):
         self.score = 0
         self.level = 1
         self.lines_cleared = 0
+        self.max_height = 0
 
         self.action_space = spaces.Discrete(6)  # 0: nichts, 1: links, 2: rechts, 3: runter, 4: drehen, 5: harter Drop
-        self.observation_space = spaces.Box(low=0, high=1, shape=(ROWS, COLS), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(2, ROWS, COLS), dtype=np.float32)
         self.ticks = 0
-        self.fall_interval = 1  # Alle x ticks ein automatischer Fall
+        self.fall_interval = 2  # Alle x ticks ein automatischer Fall
 
 
         self.current_piece = None
+        self.previous_shape = None
         self.piece_x = 0
         self.piece_y = 0
 
@@ -51,7 +59,8 @@ class TetrisEnv(gym.Env):
         self.block_size = self.window_size // ROWS
         self.screen = None
         self.clock = None
-        self.skip_render = False
+        self.skip_render = True  # Rendering im Training deaktivieren
+
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -67,7 +76,10 @@ class TetrisEnv(gym.Env):
         return self._get_obs(), {}
 
     def _spawn_piece(self):
-        self.current_piece = random.choice(list(TETROMINOS.values()))
+        while self.current_piece == self.previous_shape:
+            self.current_piece = random.choice(list(TETROMINOS.values()))
+        self.previous_shape = self.current_piece
+        
         self.piece_y = 0
         self.piece_x = COLS // 2 - len(self.current_piece[0]) // 2
 
@@ -82,7 +94,18 @@ class TetrisEnv(gym.Env):
                         return False
         return True
 
+
+    #Bestrafung für Höhe
+    def _get_max_height(self):
+        for y in range(ROWS):
+            if np.any(self.board[y]):
+                return ROWS - y
+        return 0
+
+
     def _lock_piece(self):
+        reward = 0
+
         for py, row in enumerate(self.current_piece):
             for px, cell in enumerate(row):
                 if cell:
@@ -98,20 +121,39 @@ class TetrisEnv(gym.Env):
         self.board = np.array(self.board)
 
         self.lines_cleared += lines_before
-        self.score += (lines_before ** 2) * 100
+        line_reward = (lines_before ** 2) * 100
+        reward += line_reward       # Reward für KI
+        self.score += line_reward   # Score
+
         self.level = 1 + self.lines_cleared // 5
         self._spawn_piece()
 
+        # Belohnung für Platzieren
+        reward += 5
+
+        # Bestrafe hohe Stapel leicht
+        current_height = self._get_max_height()
+        if current_height > self.max_height:
+            reward -= (current_height - self.max_height) * 5    # Für jeden Schritt nach oben -x Punkte
+            self.max_height = current_height
+
+        return reward
+
+
     def _get_obs(self):
-        obs = np.copy(self.board)
+        board_obs = np.copy(self.board)
+        piece_obs = np.zeros_like(self.board)
+
         for py, row in enumerate(self.current_piece):
             for px, cell in enumerate(row):
                 if cell:
                     x, y = self.piece_x + px, self.piece_y + py
                     if 0 <= y < ROWS and 0 <= x < COLS:
-                        obs[y][x] = 1
-        return obs.astype(np.float32)
+                        piece_obs[y][x] = 1
 
+        obs = np.stack([board_obs, piece_obs], axis=0)
+        return obs.astype(np.float32)
+    
     def step(self, action):
         reward = 0
         terminated = False
@@ -124,11 +166,11 @@ class TetrisEnv(gym.Env):
         elif action == 2:  # rechts
             if self._valid_position(self.current_piece, self.piece_x + 1, self.piece_y):
                 self.piece_x += 1
-        elif action == 3:  # runter (Soft Drop)
+        elif action == 3:  # runter
             if self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
             else:
-                self._lock_piece()
+                reward += self._lock_piece()
         elif action == 4:  # drehen
             rotated = list(zip(*self.current_piece[::-1]))
             rotated = [list(row) for row in rotated]
@@ -137,8 +179,7 @@ class TetrisEnv(gym.Env):
         elif action == 5:  # Hard Drop
             while self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
-            self._lock_piece()
-            reward += 10
+            reward += self._lock_piece()
 
         # Automatischer Fall
         self.ticks += 1
@@ -147,8 +188,7 @@ class TetrisEnv(gym.Env):
             if self._valid_position(self.current_piece, self.piece_x, self.piece_y + 1):
                 self.piece_y += 1
             else:
-                self._lock_piece()
-                reward += 10
+                reward += self._lock_piece()
 
         # Game Over prüfen
         if not self._valid_position(self.current_piece, self.piece_x, self.piece_y):
@@ -159,25 +199,38 @@ class TetrisEnv(gym.Env):
         return obs, reward, terminated, truncated, {}
 
 
+    def _draw_text(self, text, x, y, color=(255, 255, 255)):
+        if not hasattr(self, "font") or self.font is None:
+            self.font = pygame.font.SysFont("Arial", 20)
+        surface = self.font.render(text, True, color)
+        self.screen.blit(surface, (x, y))
+
+
     def render(self, mode="human"):
         if self.skip_render:
             return
         if self.screen is None:
             pygame.init()
-            self.screen = pygame.display.set_mode((COLS * self.block_size, ROWS * self.block_size))
+            pygame.font.init()
+            self.screen = pygame.display.set_mode((COLS * self.block_size + 150, ROWS * self.block_size))
             self.clock = pygame.time.Clock()
+            self.font = pygame.font.SysFont("Arial", 20)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
 
+        # Hintergrund
         self.screen.fill((0, 0, 0))
+
+        # Spielbrett zeichnen
         for y in range(ROWS):
             for x in range(COLS):
                 color = (255, 255, 255) if self.board[y][x] else (40, 40, 40)
                 pygame.draw.rect(self.screen, color, (x * self.block_size, y * self.block_size, self.block_size, self.block_size))
 
+        # Aktuelles Tetromino zeichnen
         for py, row in enumerate(self.current_piece):
             for px, cell in enumerate(row):
                 if cell:
@@ -186,8 +239,15 @@ class TetrisEnv(gym.Env):
                     if 0 <= x < COLS and 0 <= y < ROWS:
                         pygame.draw.rect(self.screen, (0, 255, 0), (x * self.block_size, y * self.block_size, self.block_size, self.block_size))
 
+        # Score-Anzeige rechts neben dem Spielfeld
+        info_x = COLS * self.block_size + 10
+        self._draw_text(f"Score: {self.score}", info_x, 20)
+        self._draw_text(f"Level: {self.level}", info_x, 50)
+        self._draw_text(f"Lines: {self.lines_cleared}", info_x, 80)
+
         pygame.display.flip()
         self.clock.tick(10 + self.level)
+
 
     def close(self):
         if self.screen:
