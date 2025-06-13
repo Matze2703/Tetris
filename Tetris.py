@@ -130,7 +130,7 @@ with open("config.txt", "r") as datei:
 
 # Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
-backgrounds = ["1", "2", "3"]
+backgrounds = ["1", "2", "3", "4","5", "goofy"]
 pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
 pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
 pygame.mixer.music.set_volume(music_volume)
@@ -282,7 +282,7 @@ def change_background(delta):
     global bg_nr
     if delta == -1 and bg_nr != 1:
         bg_nr += delta
-    if delta == +1 and bg_nr != (len(music_tracks)):
+    if delta == +1 and bg_nr != (len(backgrounds)):
         bg_nr += delta
     bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
     tile_width, tile_height = bg_tile.get_size()
@@ -1348,7 +1348,6 @@ while running:
             (f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, 30),
             (f"Highscore:", 600, WIDTH // 2 -300, 30),
             (f"{highscore}", 670, WIDTH // 2 -300, 40),
-            (f"i dont get paid enough for this shit", HEIGHT //2, WIDTH //2,15),
         ]
         palette = [
             (0, 174, 239),   # cyan
