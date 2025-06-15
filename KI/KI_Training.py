@@ -1,3 +1,19 @@
+import importlib.util
+import subprocess
+import sys
+
+def install_and_import(package_name):
+    if importlib.util.find_spec(package_name) is None:
+        print(f"Modul '{package_name}' nicht gefunden. Installiere...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+# Alle Module installieren
+required_modules = ["PyTorch", "gymnasium", "numpy", "pandas", "matplotlib", "tqdm", "collections", "time", "pygame"]
+
+for module in required_modules:
+    install_and_import(module)
+
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +29,8 @@ import numpy as np
 import torch._dynamo
 from gymnasium.vector import SyncVectorEnv
 
-from Tetris_env import TetrisEnv  # Deine eigene Tetris-Umgebung
+from Tetris_env import TetrisEnv
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(BASE_DIR, "tetris_scores.csv")

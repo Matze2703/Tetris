@@ -1,7 +1,10 @@
-# Tetris
-Abschlussprojekt FSST
+Ein einfaches Tetris in Python, mit Sounds und einem Online-Leaderboard (Der Server ist nicht dauerhaft verfügbar).
 
-Die Grundidee ist das Spiel Tetris mit allen Mechaniken des Originals in Python zu programmieren.
-Optional soll eine KI mittels Reinforcement Learning Tetris spielen
+Alle benötigten Module sollten beim ersten Start automatisch installiert werden.
 
-(Vielleicht eine Kooperation mit Felix?)
+Steuerung:
+AD - Seitlich bewegen
+S - kurz: runter / lang: softdrop
+Leertaste: Harddrop
+W/QE: Drehen
+Escape: Pause/zurück
