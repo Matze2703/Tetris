@@ -65,6 +65,7 @@ if not os.path.isfile("config.txt"):
         datei.write("0.5\n")
         datei.write("0.5\n")
         datei.write("False\n")
+        datei.write("1\n")
 
 
 # Verschlüsselung der Scores
@@ -124,11 +125,12 @@ with open("config.txt", "r") as datei:
     selected_track = int(datei.readline().strip())
     music_volume = float(datei.readline().strip())
     sfx_volume = float(datei.readline().strip())
-    fullscreen = bool(datei.readline().strip())
-
+    fullscreen = datei.readline().strip().lower() == "true"
+    bg_nr = int(datei.readline().strip())
 
 # Musik
 music_tracks = ["Original_Theme.mp3","Piano_Theme.mp3","TAKEO_ENDBOSS.mp3"]
+backgrounds = ["1", "2", "3", "4","5", "goofy"]
 pygame.mixer.music.load("sound_design\\" + music_tracks[selected_track-1])
 pygame.mixer.music.play(-1, 0.0)    # -1 = Loopen lassen
 pygame.mixer.music.set_volume(music_volume)
@@ -146,6 +148,7 @@ def update_config():
         datei.write(f"{music_volume}\n")
         datei.write(f"{sfx_volume}\n")
         datei.write(f"{fullscreen}\n")
+        datei.write(f"{bg_nr}\n")
 
 
 WHITE = (255, 255, 255)
@@ -160,7 +163,7 @@ if fullscreen:
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
-icon = pygame.image.load("game_design\\icon.png").convert_alpha()
+icon = pygame.image.load("game_design\\icon-p.png").convert_alpha()
 pygame.display.set_icon(icon)
 
 
@@ -223,9 +226,13 @@ class Button:
 
 
 def start_game():
+    global ingame_ui_anim_active, ingame_ui_anim_start_time
     reset_game()
+    ingame_ui_anim_active = True
+    ingame_ui_anim_start_time = pygame.time.get_ticks()
     global state 
     state = "GAME"
+    
 
 def go_to_options():
     global state
@@ -271,6 +278,16 @@ def change_music_track(delta):
     pygame.mixer.music.play(-1, 0.0)
     update_config()
 
+def change_background(delta):
+    global bg_nr
+    if delta == -1 and bg_nr != 1:
+        bg_nr += delta
+    if delta == +1 and bg_nr != (len(backgrounds)):
+        bg_nr += delta
+    bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
+    tile_width, tile_height = bg_tile.get_size()
+    draw_background()
+    update_config()
 
 def refresh_leaderboard():
     global getting_scores
@@ -340,6 +357,9 @@ def toggle_fullscreen():
     fullscreen = not fullscreen
     update_config()
 
+def quit_game():
+    pygame.quit()
+    sys.exit()
 
 
 
@@ -349,6 +369,7 @@ def get_menu_buttons(width, height):
         Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
         Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, go_to_options),
         Button("Leaderboard", width // 2 - 100, height // 2 + 200, 200, 50, show_leaderboard),
+        Button("QUIT", width // 2 - 100, height // 2 + 300, 200, 50, quit_game)
     ]
 
 def get_leaderboard_UI(width, height):
@@ -365,6 +386,10 @@ def get_options_UI(width, height):
         Button(">", width // 2 +170, height // 2 -25, 80, 50, lambda: change_volume("music_volume", +0.05)),
         Button("<", width // 2 -250, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", -0.05)),
         Button(">", width // 2 +170, height // 2 +75, 80, 50, lambda: change_volume("sfx_volume", +0.05)),
+
+        Button("<", width // 2 -275, height // 2 -225, 80, 50, lambda: change_background(-1)),
+        Button(">", width // 2 +195, height // 2 -225, 80, 50, lambda: change_background(+1)),
+    
         Button("Back", width // 2 -300, height // 2 +300, 150, 80, go_back),
         Button("Toggle Fullscreen",  width // 2 - 70, height // 2 +170, 150, 80, toggle_fullscreen),
     ]
@@ -560,10 +585,10 @@ def clear_lines():
     # combo mombo + level
     if cleared:
         # Bissl kompliziertere Logik für level um Sound einzubauen
-        level = 1 + lines_cleared // 5  #<-- je x zeilen wird level erhöht
+        level = 1 + lines_cleared // 10  #<-- je x zeilen wird level erhöht
         if old_level != level:
             play_sound("level_up.mp3")
-        fall_speed = max(100, 500 - (level - 1) * 30)
+        fall_speed = max(16, int(1000 * (0.8 - (level - 1) * 0.007) ** (level - 1)))
         
         combo_count += 1
         score_add = int(round(base_scores[cleared] *  level,0))
@@ -659,6 +684,7 @@ def hard_drop():
     merge_piece(current_piece)
     clear_lines()
     current_piece = next_queue.pop(0)
+    dyn_icon(current_piece)
     next_queue.append(create_piece())
     used_hold = False
     lock_pending = False
@@ -666,14 +692,41 @@ def hard_drop():
         pygame.time.delay(500)
         game_over()
 
+def dyn_icon(current_piece):
+    # Dynamisches Game Icon
+    shape = current_piece['shape']
+    if shape == "I":
+        dyn_icon = "I"
+    elif shape == "O":
+        dyn_icon = "y"
+    elif shape == "T":
+        dyn_icon = "p"
+    elif shape == "S":
+        dyn_icon = "g"
+    elif shape == "Z":
+        dyn_icon = "r"
+    elif shape == "J":
+        dyn_icon = "b"
+    elif shape == "L":
+        dyn_icon = "o"
+    try:
+        icon = pygame.image.load(f"game_design\\icon-{dyn_icon}.png").convert_alpha()
+        pygame.display.set_icon(icon)
+    except:
+        None
+
+
 def reset_game():
-    global board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
+    global dyn_icon, icon, board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
     next_queue = [create_piece() for _ in range(3)]
     current_piece = next_queue.pop(0)
+    
+    dyn_icon(current_piece)
+
     next_queue.append(create_piece())
     fall_time = pygame.time.get_ticks()  # Initialize to current time
-    fall_speed = 500
+    fall_speed = 1000
     score = 0
     level = 1
     lines_cleared = 0
@@ -689,6 +742,7 @@ def hold_current_piece():
     if hold_piece is None:
         hold_piece = current_piece
         current_piece = next_queue.pop(0)
+        dyn_icon(current_piece)
         next_queue.append(create_piece())
     else:
         hold_piece, current_piece = current_piece, hold_piece
@@ -850,13 +904,20 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
     surface.blit(txt_surface, txt_rect)
 
 
-bg_tile = pygame.image.load("game_design\\Background-n.png").convert()
-tile_width, tile_height = bg_tile.get_size()
+def get_bg_tile():
+    bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
+    tile_width, tile_height = bg_tile.get_size()
+    return bg_tile, tile_width, tile_height
 
 def draw_background():
+    bg_tile, tile_width, tile_height = get_bg_tile()
     for x in range(0, WIDTH, tile_width):
         for y in range(0, HEIGHT, tile_height):
             screen.blit(bg_tile, (x, y))
+
+
+bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
+tile_width, tile_height = bg_tile.get_size()
 
 def update_GUI():
     global WIDTH, HEIGHT
@@ -898,12 +959,17 @@ skip_intro = 0
 
 MENU_LOGO = " TETRIS "
 MENU_LOGO_FONT_SIZE = 80
-MENU_TRANSITION_BASE_SPEED = 40  # ms per char
-MENU_TRANSITION_VARIANCE = 60    # ms random extra per char
+MENU_TRANSITION_BASE_SPEED = 100  # ms per char
+MENU_TRANSITION_VARIANCE = 40    # ms random extra per char
 menu_transition_active = False
 menu_transition_start_time = 0
 menu_transition_chars = []
 menu_transition_done = False
+
+# --- In-game UI Animation Variables ---
+ingame_ui_anim_active = False
+ingame_ui_anim_start_time = 0
+ingame_ui_anim_duration = 1000  # ms for full text
 
 def start_menu_transition(buttons):
     global menu_transition_active, menu_transition_start_time, menu_transition_chars, menu_transition_done
@@ -979,6 +1045,10 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F11:
+                pygame.display.toggle_fullscreen()
+
         if state == "BOOTUP_SEQUENCE":
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE or pygame.K_SPACE:
@@ -1043,6 +1113,7 @@ while running:
                     
                 elif event.key == pygame.K_f:
                     hold_current_piece()
+                    dyn_icon(current_piece)
 
             # Richtiger Soft Drop
             elif event.type == pygame.KEYUP:
@@ -1127,6 +1198,7 @@ while running:
                     merge_piece(current_piece)
                     clear_lines()
                     current_piece = next_queue.pop(0)
+                    dyn_icon(current_piece)
                     next_queue.append(create_piece())
                     used_hold = False
                     lock_pending = False
@@ -1152,6 +1224,7 @@ while running:
         # Draw black background
         screen.fill(BLACK)
         # Draw faded-in background image
+        bg_tile, tile_width, tile_height = get_bg_tile()
         bg_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         for x in range(0, WIDTH, tile_width):
             for y in range(0, HEIGHT, tile_height):
@@ -1217,19 +1290,23 @@ while running:
         # Draw buttons only during animation, not after (no border for animated text)
         all_done = True
         if not menu_transition_done:
+            # Recalculate button positions every frame for animation
+            animated_buttons = get_menu_buttons(WIDTH, HEIGHT)
             for i, (btn, btn_times) in enumerate(menu_transition_chars[1:]):
                 chars = [c for c, t in btn_times if elapsed_anim >= t]
                 if len(chars) < len(btn.text):
                     all_done = False
                 if chars:
-                    # Draw border for animated button text
+                    # Use the current position from the recalculated button
+                    anim_btn = animated_buttons[i]
                     draw_text_centered(
                         "".join(chars),
-                        btn.rect.centery,
-                        btn.rect.centerx,
+                        anim_btn.rect.centery,
+                        anim_btn.rect.centerx,
                         "game_design\\Border_2.png"
                     )
         menu_transition_done = all_done and menu_fade_alpha == 255
+
         # Only allow button interaction and draw full buttons after animation is done
         if menu_transition_done:
             for btn in menu_buttons:
@@ -1238,6 +1315,7 @@ while running:
         draw_text_centered(f"TRACK: {selected_track}", HEIGHT // 2 -100)
         draw_text_centered(f"MUSIK: {round(music_volume*100)}%", HEIGHT // 2)
         draw_text_centered(f"SFX: {round(sfx_volume*100)}%", HEIGHT // 2 +100)
+        draw_text_centered(f"Background:{bg_nr}", HEIGHT // 2-200 )
         for btn in get_options_UI(WIDTH, HEIGHT):
             btn.draw(screen)
 
@@ -1259,29 +1337,83 @@ while running:
                 line = line.strip()
                 name = ''
                 data_score = ''
-                
                 if ':' in line:
                     parts = line.split(':')
                     name = parts[0].strip()
                     data_score = int(''.join(filter(str.isdigit, parts[1])))
                     if data_score > highscore:
                         highscore = data_score
-                        
         encrypt_file("Scores.txt")
 
-        draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
-        draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
-        draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
-        draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
+        # --- Animated UI Text ---
+        ui_texts = [
+            (f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), 30),
+            (f"Level: {level}", 550, WIDTH // 2 +300, 30),
+            (f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, 30),
+            (f"Highscore:", 600, WIDTH // 2 -300, 30),
+            (f"{highscore}", 670, WIDTH // 2 -300, 40),
+        ]
+        palette = [
+            (0, 174, 239),   # cyan
+            (255, 213, 0),   # yellow
+            (255, 121, 0),   # orange
+            (237, 28, 36),   # red
+            (0, 166, 81),    # green
+            (128,0,128),     # purple
+        ]
+        palette_offset = (pygame.time.get_ticks() // 100) % len(palette)
+        if ingame_ui_anim_active:
+            elapsed_anim = pygame.time.get_ticks() - ingame_ui_anim_start_time
+            for idx, (text, y, x, font_size) in enumerate(ui_texts):
+                chars_to_show = int(len(text) * min(1, elapsed_anim / ingame_ui_anim_duration))
+                shown = text[:chars_to_show]
+                if shown:
+                    fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", font_size)
+                    char_surfaces = [fnt.render(c, True, WHITE) for c in shown]
+                    total_width = sum(s.get_width() for s in char_surfaces)
+                    tx = x - total_width // 2
+                    ty = y
+                    txt_height = char_surfaces[0].get_height() if char_surfaces else 0
+                    padding = 20
+                    box_rect = pygame.Rect(tx, ty - txt_height//2, total_width, txt_height).inflate(padding*2, padding*2)
+                    pygame.draw.rect(screen, BLACK, box_rect)
+                    border = pygame.image.load("game_design\\Border_2.png").convert_alpha()
+                    corner = 20
+                    bw, bh = border.get_size()
+                    top_left     = border.subsurface((0, 0, corner, corner))
+                    top_right    = border.subsurface((bw - corner, 0, corner, corner))
+                    bottom_left  = border.subsurface((0, bh - corner, corner, corner))
+                    bottom_right = border.subsurface((bw - corner, bh - corner, corner, corner))
+                    top    = border.subsurface((corner, 0, bw - 2 * corner, corner))
+                    bottom = border.subsurface((corner, bh - corner, bw - 2 * corner, corner))
+                    left   = border.subsurface((0, corner, corner, bh - 2 * corner))
+                    right  = border.subsurface((bw - corner, corner, corner, bh - 2 * corner))
+                    screen.blit(top_left, (box_rect.left, box_rect.top))
+                    screen.blit(top_right, (box_rect.right - corner, box_rect.top))
+                    screen.blit(bottom_left, (box_rect.left, box_rect.bottom - corner))
+                    screen.blit(bottom_right, (box_rect.right - corner, box_rect.bottom - corner))
+                    screen.blit(pygame.transform.scale(top, (box_rect.width - 2 * corner, corner)), 
+                                (box_rect.left + corner, box_rect.top))
+                    screen.blit(pygame.transform.scale(bottom, (box_rect.width - 2 * corner, corner)), 
+                                (box_rect.left + corner, box_rect.bottom - corner))
+                    screen.blit(pygame.transform.scale(left, (corner, box_rect.height - 2 * corner)), 
+                                (box_rect.left, box_rect.top + corner))
+                    screen.blit(pygame.transform.scale(right, (corner, box_rect.height - 2 * corner)), 
+                                (box_rect.right - corner, box_rect.top + corner))
+                    cx = tx
+                    for surf in char_surfaces:
+                        screen.blit(surf, (cx, ty - surf.get_height()//2))
+                        cx += surf.get_width()
+            if elapsed_anim >= ingame_ui_anim_duration:
+                ingame_ui_anim_active = False
                 
-        #Neuer Highscore
-        if score > highscore:
-            highscore = score
-            if not new_highscore:
-                play_sound("new_record.mp3")
-                score_popup.append(ScorePopup("!! NEW HIGHSCORE !!", WIDTH//2 + GAME_WIDTH//2 -500, HEIGHT//2 - GAME_HEIGHT//2 + 300, big=True))
-                new_highscore = True
-        draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
+        else:
+            draw_text_centered(f"Score: {int(score)}", 450, WIDTH // 2 +300 +10*len(str(int(score))), font_size=30)
+            draw_text_centered(f"Level: {level}", 550, WIDTH // 2 +300, font_size=30)
+            draw_text_centered(f"Lines: {lines_cleared}", 650, WIDTH // 2 +300, font_size=30)
+            draw_text_centered(f"Highscore:", 600, WIDTH // 2 -300, font_size=30)
+            draw_text_centered(f"{highscore}", 670, WIDTH // 2 -300, font_size=40)
+            
 
         draw_next_pieces()
         draw_hold_piece()
@@ -1289,7 +1421,6 @@ while running:
             if popup.is_alive():
                 popup.draw()
         score_popup[:] = [p for p in score_popup if p.is_alive()]
-
     
     elif state == "PAUSE":
         if game_over_blink_visible:
