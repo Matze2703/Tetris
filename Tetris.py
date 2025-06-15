@@ -169,7 +169,7 @@ pygame.display.set_icon(icon)
 state = "BOOTUP_SEQUENCE"
 previous_state = ''
 bootup_start_time = pygame.time.get_ticks()
-bootup_duration = 5000  # milliseconds (3 seconds)
+bootup_duration = 5000  # milliseconds (5 seconds)
 fade_duration = 1000    # milliseconds (1 second for fade in/out)
 
 font = pygame.font.Font(r"game_design\Pixel_Emulator.otf", 40)
