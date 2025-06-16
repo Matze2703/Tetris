@@ -1015,7 +1015,7 @@ while running:
 
         # Draw black background
         screen.fill((0, 0, 0))
-        # Render text surface
+        # Render text surfaces
         bootup_font = pygame.font.Font(r"game_design\Pixel_Emulator.otf", 24)
         text_surface = bootup_font.render("content intended for mature audiences only", True, (255, 255, 255))
         text_surface.set_alpha(alpha)
@@ -1025,6 +1025,14 @@ while running:
         text_surface2.set_alpha(alpha)
         text_rect2 = text_surface2.get_rect(center=(WIDTH // 2, HEIGHT //2 -50))
         screen.blit(text_surface2,text_rect2)
+        copyright_img = pygame.image.load(f"game_design\\polnische_Mafia.png").convert()
+        copyright_img.set_alpha(alpha)
+        img_rect = copyright_img.get_rect(center=(WIDTH // 2, HEIGHT //2 +200))
+        screen.blit(copyright_img,img_rect)
+        text_surface3 = bootup_font.render("© Copyright Polnische Mafia", True, (255,255,255))
+        text_surface3.set_alpha(alpha)
+        text_rect3 = text_surface3.get_rect(center=(WIDTH // 2, HEIGHT //2 +360))
+        screen.blit(text_surface3,text_rect3)
         
         pygame.display.flip()
         # After bootup_duration ms, switch to MENU
