@@ -1,3 +1,19 @@
+import importlib.util
+import subprocess
+import sys
+
+def install_and_import(package_name):
+    if importlib.util.find_spec(package_name) is None:
+        print(f"Modul '{package_name}' nicht gefunden. Installiere...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+# Alle Module installieren
+required_modules = ["PyTorch", "gymnasium", "numpy", "pandas", "matplotlib", "tqdm", "collections", "time", "pygame"]
+
+for module in required_modules:
+    install_and_import(module)
+
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +29,8 @@ import numpy as np
 import torch._dynamo
 from gymnasium.vector import SyncVectorEnv
 
-from Tetris_env import TetrisEnv  # Deine eigene Tetris-Umgebung
+from Tetris_env import TetrisEnv
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(BASE_DIR, "tetris_scores.csv")
@@ -50,18 +67,18 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
+pygame.mixer.init()
 def play_sound(soundfile):
-    pygame.mixer.init()
     sound = pygame.mixer.Sound(f"sound_design\\{soundfile}")
     sound.play()
 
 def train():
     play_sound("line_clear.mp3")
     episodes = int(input("\nTrainingsepisoden: "))
-    batch_size = 64     #Belastung von CPU/GPU
+    batch_size = 128     #Belastung von CPU/GPU
     gamma = 0.99
     epsilon = 1.0
-    epsilon_decay = 0.995
+    epsilon_decay = 0.99
     epsilon_min = 0.05
     learning_rate = 1e-3
 
@@ -111,7 +128,7 @@ def train():
     for episode in trange(start_episode, start_episode + episodes, desc="KI Training"):
         # Dynamische Aktionsfreigabe je Episode
         if episode < 1000:
-            allowed_actions = [0, 1, 2]  # Phase 1
+            allowed_actions = [0, 1, 2, 4]  # Phase 1 + Test mit Rotation?
             phase = 0
         elif episode < 2000:
             allowed_actions = [0, 1, 2, 4]  # Phase 2: + Rotation
@@ -124,7 +141,7 @@ def train():
             phase = 3
 
         if phase != current_phase:
-            print(f"Aktionsphase {phase} aktiviert (Episode {episode}) – Erlaubt: {allowed_actions}")
+            print(f"\nAktionsphase {phase} aktiviert (Episode {episode}) - Erlaubt: {allowed_actions}")
             current_phase = phase
 
         obs, _ = envs.reset()
@@ -232,36 +249,35 @@ def train():
             print("Bitte nur 'y' oder 'n' eingeben.")
 
 
+
 def play_demo_episode(model, env, device):
+    # Ensure rendering is enabled
+    env.skip_render = False
+    
     obs, _ = env.reset()
     state = torch.tensor(obs.flatten(), dtype=torch.float32).unsqueeze(0).to(device)
     done = False
     total_reward = 0
 
     print("\nSpiele eine Vorzeigerunde...")
-    fall_interval = 0.5  # alle 0.5 Sekunden automatisch nach unten
-    last_fall_time = time.time()
 
     while not done:
         env.render()
-        current_time = time.time()
-
-        if current_time - last_fall_time >= fall_interval:
-            action = 3  # runter
-            last_fall_time = current_time
-        else:
-            with torch.no_grad():
-                q_values = model(state)
-                action = q_values.argmax(dim=1).item()
+        
+        with torch.no_grad():
+            q_values = model(state)
+            action = q_values.argmax(dim=1).item()
 
         next_obs, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
         state = torch.tensor(next_obs.flatten(), dtype=torch.float32).unsqueeze(0).to(device)
         total_reward += reward
+        print(f"Aktion: {action} | Reward: {reward}")
+        time.sleep(0.05)  # Slow down for visibility
 
     print(f"\n    Vorzeigerunde abgeschlossen:")
-    print(f"   ➤ Gesamtreward (Trainingssicht): {total_reward}")
-    print(f"   ➤ Sichtbarer Spiel-Score:        {env.score}")
+    print(f"      Gesamtreward (Trainingssicht): {total_reward}")
+    print(f"      Sichtbarer Spiel-Score:        {env.score}")
 
 
 

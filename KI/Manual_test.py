@@ -6,6 +6,7 @@ def main():
     obs, _ = env.reset()
     done = False
     total_score = 0
+    env.skip_render = False
 
     print("Tastenbelegung:")
     print("← = links | → = rechts | ↓ = runter | ↑ = drehen | Leertaste = harter Drop | ESC = Beenden")
@@ -33,6 +34,7 @@ def main():
                     continue
 
                 total_score += reward
+                print(f"Reward: {reward}")
                 done = terminated or truncated
 
     env.close()

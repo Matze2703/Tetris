@@ -38,6 +38,7 @@ class TetrisEnv(gym.Env):
     def __init__(self):
         super(TetrisEnv, self).__init__()
         self.board = np.zeros((ROWS, COLS), dtype=int)
+        self.punished_spaces = np.zeros((ROWS, COLS), dtype=bool)
         self.score = 0
         self.level = 1
         self.lines_cleared = 0
@@ -90,7 +91,8 @@ class TetrisEnv(gym.Env):
                     nx, ny = x + px, y + py
                     if nx < 0 or nx >= COLS or ny >= ROWS:
                         return False
-                    if ny >= 0 and self.board[ny][nx]:
+                    # Nur feste Blöcke (1) blockieren, bestrafte Löcher (2) nicht
+                    if ny >= 0 and self.board[ny][nx] == 1:
                         return False
         return True
 
@@ -102,39 +104,82 @@ class TetrisEnv(gym.Env):
                 return ROWS - y
         return 0
 
+    #Bestrafung für Löcher
+    def _punish_free_space(self):
+        reward = 0
+        # Finde für jede Spalte die unterste besetzte Zelle
+        column_lowest = {}
+        
+        # Durchlaufe alle Zellen des Tetrominos von unten nach oben
+        for py in range(len(self.current_piece)-1, -1, -1):
+            for px, cell in enumerate(self.current_piece[py]):
+                if not cell:
+                    continue
+                    
+                x = self.piece_x + px
+                
+                # Wenn wir in dieser Spalte noch keine unterste Zelle gefunden haben
+                if x not in column_lowest:
+                    column_lowest[x] = py
+                    
+        # Bestrafe nur die Zellen direkt unter den untersten besetzten Zellen
+        for x, py in column_lowest.items():
+            y = self.piece_y + py
+            below_y = y + 1
+            
+            # Überprüfe die Zelle direkt unter der untersten besetzten Zelle
+            if 0 <= below_y < ROWS and 0 <= x < COLS:
+                if self.board[below_y][x] == 0:  # Leerer Raum darunter
+                    self.board[below_y][x] = 2  # Markiere als bestraftes Loch
+                    reward -= 5
+                    
+        return reward
+
 
     def _lock_piece(self):
         reward = 0
 
+        # Stein ins Board einfügen, ersetze 2er durch 1er
         for py, row in enumerate(self.current_piece):
             for px, cell in enumerate(row):
                 if cell:
                     x, y = self.piece_x + px, self.piece_y + py
                     if 0 <= y < ROWS and 0 <= x < COLS:
-                        self.board[y][x] = 1
+                        if self.board[y][x] == 2:
+                            reward += 10  # Bonus für das Füllen eines bestraften Feldes
+                        self.board[y][x] = 1  # Normales Blockfeld
 
-        # Linien löschen
-        lines_before = np.count_nonzero(self.board.sum(axis=1) == COLS)
-        self.board = np.array([row for row in self.board if not all(row)]).tolist()
+        # Linien löschen - NUR VOLLSTÄNDIG MIT 1 GEFÜLLTE REIHEN
+        full_rows = []
+        for i, row in enumerate(self.board):
+            # Prüfe, ob die Reihe komplett mit festen Blöcken (1) gefüllt ist
+            if all(cell == 1 for cell in row):
+                full_rows.append(i)
+
+        self.board = np.array([row for row in self.board if not all(cell == 1 for cell in row)]).tolist()
         new_rows = ROWS - len(self.board)
         self.board = [[0] * COLS for _ in range(new_rows)] + self.board
         self.board = np.array(self.board)
 
-        self.lines_cleared += lines_before
-        line_reward = (lines_before ** 2) * 100
-        reward += line_reward       # Reward für KI
-        self.score += line_reward   # Score
-
+        self.lines_cleared += len(full_rows)
+        base_scores = [0, 100, 300, 500, 800]
+        line_reward = base_scores[len(full_rows)]
+        reward += line_reward
+        self.score += line_reward
         self.level = 1 + self.lines_cleared // 5
+
+        # Bestrafung Löcher
+        reward += self._punish_free_space()
+
         self._spawn_piece()
 
-        # Belohnung für Platzieren
+        # Belohnung fürs Platzieren
         reward += 5
 
-        # Bestrafe hohe Stapel leicht
+        # Bestrafe hohe Stapel
         current_height = self._get_max_height()
         if current_height > self.max_height:
-            reward -= (current_height - self.max_height) * 5    # Für jeden Schritt nach oben -x Punkte
+            reward -= (current_height - self.max_height) * 10
             self.max_height = current_height
 
         return reward
@@ -224,11 +269,19 @@ class TetrisEnv(gym.Env):
         # Hintergrund
         self.screen.fill((0, 0, 0))
 
-        # Spielbrett zeichnen
+        # Spielbrett zeichnen mit farblicher Unterscheidung
         for y in range(ROWS):
             for x in range(COLS):
-                color = (255, 255, 255) if self.board[y][x] else (40, 40, 40)
-                pygame.draw.rect(self.screen, color, (x * self.block_size, y * self.block_size, self.block_size, self.block_size))
+                if self.board[y][x] == 1:    # Normal block White
+                    color = (255, 255, 255)
+                elif self.board[y][x] == 2:  # Punished hole Red
+                    color = (255, 0, 0)
+                else:                        # Empty space Black
+                    color = (40, 40, 40)
+                pygame.draw.rect(self.screen, color, 
+                                (x * self.block_size, y * self.block_size, 
+                                 self.block_size, self.block_size))
+
 
         # Aktuelles Tetromino zeichnen
         for py, row in enumerate(self.current_piece):
