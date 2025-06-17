@@ -54,16 +54,6 @@ The required Python modules are automatically installed if missing:
 
 - Have fun!
 
-## File Structure
-.
-├── Tetris.py # Main game script
-├── database_access.py # Handles online leaderboard interaction
-├── sound_design/ # Music and sound files
-├── game_design/ # Icons, borders, backgrounds, font
-├── config.txt # Generated settings file
-├── schluessel.key # Encryption key for scores
-├── Scores.txt.enc # Encrypted local scores
-└── not_uploaded.txt.enc # Local backup of unsynced scores
 
 ## Disclaimer
 
