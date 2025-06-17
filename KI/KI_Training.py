@@ -8,7 +8,7 @@ def install_and_import(package_name):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
 # Alle Module installieren
-required_modules = ["PyTorch", "gymnasium", "numpy", "pandas", "matplotlib", "tqdm", "collections", "time", "pygame"]
+required_modules = ["torch", "gymnasium", "numpy", "pandas", "matplotlib", "tqdm", "collections", "time", "pygame"]
 
 for module in required_modules:
     install_and_import(module)
@@ -27,7 +27,7 @@ import time
 import pygame
 import numpy as np
 import torch._dynamo
-from gymnasium.vector import SyncVectorEnv
+from gymnasium.vector import AsyncVectorEnv
 
 from Tetris_env import TetrisEnv
 
@@ -42,12 +42,15 @@ class DQN(nn.Module):
     def __init__(self, input_dim=2 * 20 * 10, output_dim=6):  # 2 Kanäle mit 20x10
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 128),
+            nn.Linear(input_dim, 512),
             nn.ReLU(),
-            nn.Linear(128, 64),
+            nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(64, output_dim)
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
         )
+
 
     def forward(self, x):
         return self.net(x)
@@ -61,11 +64,22 @@ class ReplayBuffer:
     def push(self, transition):
         self.buffer.append(transition)
 
+    def push_batch(self, states, actions, rewards, next_states, dones):
+        for i in range(len(states)):
+            self.buffer.append((
+                states[i].unsqueeze(0).cpu(),  # wichtig: ggf. .cpu(), damit RAM nicht überläuft
+                actions[i],
+                rewards[i],
+                next_states[i].unsqueeze(0).cpu(),
+                dones[i]
+            ))
+
     def sample(self, batch_size):
         return random.sample(self.buffer, batch_size)
 
     def __len__(self):
         return len(self.buffer)
+
 
 pygame.mixer.init()
 def play_sound(soundfile):
@@ -75,7 +89,7 @@ def play_sound(soundfile):
 def train():
     play_sound("line_clear.mp3")
     episodes = int(input("\nTrainingsepisoden: "))
-    batch_size = 128     #Belastung von CPU/GPU
+    batch_size = 1024     #Belastung von CPU/GPU
     gamma = 0.99
     epsilon = 1.0
     epsilon_decay = 0.99
@@ -86,7 +100,7 @@ def train():
     NUM_ENVS = 1 # Nur 1 Environment bei CPU
     if torch.cuda.is_available():
         print(f"GPU erkannt: {torch.cuda.get_device_name(0)}")
-        NUM_ENVS = 4  # oder 8, je nach Speicher – RTX 3090 schafft locker 8
+        NUM_ENVS = 8  # oder 8, je nach Speicher – RTX 3090 schafft locker 8
 
     def make_env():
         def _init():
@@ -95,10 +109,11 @@ def train():
             return env
         return _init
 
-    envs = SyncVectorEnv([make_env() for _ in range(NUM_ENVS)])
+    envs = AsyncVectorEnv([make_env() for _ in range(NUM_ENVS)])
 
     model = DQN().to(device)
-    if torch.__version__ >= "2.0":  # Modell komprimieren, um schneller zu trainieren
+    if torch.__version__ >= "2.0" and not torch.cuda.is_available():  # Modell komprimieren, um schneller zu trainieren
+        print("Compiling aktiviert")
         torch._dynamo.config.suppress_errors = True
         model = torch.compile(model, backend="eager")  # kein JIT, aber stabil
 
@@ -120,15 +135,15 @@ def train():
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_episode = checkpoint["episode"] + 1
-        print(f"Modell geladen, fortsetzen bei Episode {start_episode}")
+        print(f"Modell geladen, fortsetzen bei Episode {start_episode}\n")
     else:
-        print("Kein Modell gefunden")
+        print("Kein Modell gefunden\n")
 
     current_phase = -1  # für Logging
     for episode in trange(start_episode, start_episode + episodes, desc="KI Training"):
         # Dynamische Aktionsfreigabe je Episode
-        if episode < 1000:
-            allowed_actions = [0, 1, 2, 4]  # Phase 1 + Test mit Rotation?
+        if episode < 500:
+            allowed_actions = [0, 1, 2]  # Phase 1: nur Movement
             phase = 0
         elif episode < 2000:
             allowed_actions = [0, 1, 2, 4]  # Phase 2: + Rotation
@@ -145,7 +160,7 @@ def train():
             current_phase = phase
 
         obs, _ = envs.reset()
-        state = torch.tensor(obs.reshape(NUM_ENVS, -1), dtype=torch.float32).to(device)
+        state = torch.from_numpy(obs).reshape(NUM_ENVS, -1).to(device)
 
 
         total_reward = 0
@@ -153,27 +168,28 @@ def train():
 
         while not done:
             actions = []
+            with torch.no_grad():
+                q_values = model(state)  # shape: [NUM_ENVS, num_actions]
+
+            actions = []
             for i in range(NUM_ENVS):
                 if random.random() < epsilon:
                     actions.append(random.choice(allowed_actions))
                 else:
-                    with torch.no_grad():
-                        q_values = model(state[i].unsqueeze(0))
-                        actions.append(allowed_actions[torch.argmax(q_values[0][allowed_actions]).item()])
+                    allowed_q = q_values[i][allowed_actions]
+                    actions.append(allowed_actions[allowed_q.argmax().item()])
+
+            
             actions = np.array(actions)
 
 
             next_obs, rewards, terminated, truncated, _ = envs.step(actions)
-            done = terminated or truncated
-            next_state = torch.tensor(next_obs.reshape(NUM_ENVS, -1), dtype=torch.float32).to(device)
+            done = np.any(terminated) or np.any(truncated)
+            next_state = torch.from_numpy(obs).reshape(NUM_ENVS, -1).to(device)
 
-            for i in range(NUM_ENVS):
-                done = terminated[i] or truncated[i]
-                replay_buffer.push((state[i].unsqueeze(0),
-                                    actions[i],
-                                    rewards[i],
-                                    next_state[i].unsqueeze(0),
-                                    done))
+            # vektorisierte Verarbeitung der Environments:
+            dones = np.logical_or(terminated, truncated)
+            replay_buffer.push_batch(state, actions, rewards, next_state, dones)
 
             state = next_state
             total_reward += sum(rewards)
@@ -181,9 +197,9 @@ def train():
             if len(replay_buffer) >= batch_size:
                 batch = replay_buffer.sample(batch_size)
                 states, actions, rewards, next_states, dones = zip(*batch)
-
-                states = torch.cat(states)
-                next_states = torch.cat(next_states)
+                
+                states = torch.cat(states).to(device)
+                next_states = torch.cat(next_states).to(device)
                 actions = torch.tensor(actions, dtype=torch.long).to(device)
                 rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
                 dones = torch.tensor(dones, dtype=torch.float32).to(device)
