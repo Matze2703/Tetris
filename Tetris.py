@@ -163,7 +163,7 @@ if fullscreen:
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
-icon = pygame.image.load("game_design\\icon-p.png").convert_alpha()
+icon = pygame.image.load("game_design\\icon2.png").convert_alpha()
 pygame.display.set_icon(icon)
 
 
@@ -1117,6 +1117,8 @@ while running:
         if state == "MENU":
             getting_scores = True # Für Online-Leaderboard
             # Always get fresh button positions for current window size
+            icon = pygame.image.load("game_design\\icon2.png").convert_alpha()
+            pygame.display.set_icon(icon)
             menu_buttons = get_menu_buttons(WIDTH, HEIGHT)
             if menu_transition_done:
                 for btn in menu_buttons:
