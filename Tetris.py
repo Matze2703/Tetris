@@ -8,7 +8,7 @@
 ╚══██╔══╝██╔════╝╚══██╔══╝ ██╔══██╗ ██║██╔════╝ 
    ██║   █████╗     ██║    ██████╔╝ ██║███████╗ 
    ██║   ██╔══╝     ██║    ██╔══██╗ ██║╚════██║  
-   ██║   ███████╗   ██║    ██║  ██║ ██║███████║  ...2
+   ██║   ███████╗   ██║    ██║  ██║ ██║███████║ 
    ╚═╝   ╚══════╝   ╚═╝    ╚═╝  ╚═╝ ╚═╝╚══════╝ 
 
    Das beste Spiel seit "Tetris"!
@@ -163,7 +163,7 @@ if fullscreen:
 pygame.display.set_caption("Tetris")
 clock = pygame.time.Clock()
 
-icon = pygame.image.load("game_design\\icon-p.png").convert_alpha()
+icon = pygame.image.load("game_design\\icon2.png").convert_alpha()
 pygame.display.set_icon(icon)
 
 
@@ -206,6 +206,7 @@ SHAPE_COLORS = {
 
 # Button class
 class Button:
+    """UI Button for menus, handles drawing and click events."""
     def __init__(self, text, x, y, w, h, callback):
         self.rect = pygame.Rect(x, y, w, h)
         self.text = text
@@ -226,6 +227,7 @@ class Button:
 
 
 def start_game():
+    """Start a new game and trigger the in-game UI animation."""
     global ingame_ui_anim_active, ingame_ui_anim_start_time
     reset_game()
     ingame_ui_anim_active = True
@@ -235,30 +237,37 @@ def start_game():
     
 
 def go_to_options():
+    """Switch to the options menu."""
     global state
     state = "OPTIONS"
 
 def return_to_menu():
+    """Return to the main menu."""
     global state
     state = "MENU"
 
 def resume_game():
+    """Resume the game from pause."""
     global state 
     state = "GAME"
 
 def go_back():
+    """Return to the previous menu/state."""
     global state, previous_state
     state = previous_state
 
 def game_over():
+    """Switch to the game over state."""
     global state
     state = "GAME_OVER"
 
 def save_score():
+    """Switch to the enter name state for saving score."""
     global state
     state = "ENTER_NAME"
 
 def change_volume(variable,delta):
+    """Change the music or SFX volume by delta."""
     if variable == "music_volume":
         global music_volume
         music_volume = min(max(round((music_volume + delta) * 20) / 20, 0.0), 1.0)
@@ -269,6 +278,7 @@ def change_volume(variable,delta):
     update_config()
 
 def change_music_track(delta):
+    """Change the music track by delta."""
     global selected_track
     if delta == -1 and selected_track != 1:
         selected_track += delta
@@ -279,6 +289,7 @@ def change_music_track(delta):
     update_config()
 
 def change_background(delta):
+    """Change the background image by delta."""
     global bg_nr
     if delta == -1 and bg_nr != 1:
         bg_nr += delta
@@ -290,10 +301,12 @@ def change_background(delta):
     update_config()
 
 def refresh_leaderboard():
+    """Trigger leaderboard refresh from server."""
     global getting_scores
     getting_scores = True
 
 def show_leaderboard():
+    """Display the leaderboard, fetch from server if online."""
     global state, getting_scores, is_online, width, height
     state = "LEADERBOARD"
     leaderboard = {}
@@ -352,12 +365,14 @@ def show_leaderboard():
         line_height += 1
 
 def toggle_fullscreen():
+    """Toggle fullscreen mode and update config."""
     global fullscreen
     pygame.display.toggle_fullscreen()
     fullscreen = not fullscreen
     update_config()
 
 def quit_game():
+    """Quit the game and close the application."""
     pygame.quit()
     sys.exit()
 
@@ -365,6 +380,7 @@ def quit_game():
 
 #Platzierung der Buttons korrigieren
 def get_menu_buttons(width, height):
+    """Return a list of main menu buttons for the given window size."""
     return [
         Button("Start", width // 2 - 100, height // 2 , 200, 50, start_game),
         Button("Options", width // 2 - 100, height // 2 + 100, 200, 50, go_to_options),
@@ -373,12 +389,14 @@ def get_menu_buttons(width, height):
     ]
 
 def get_leaderboard_UI(width, height):
+    """Return leaderboard UI buttons."""
     return [
         Button("Back",width // 2 - 550, height // 2 + 300, 150, 80, go_back),
         Button("Refresh", width // 2 + 450, height // 2 - 300, 200, 80, refresh_leaderboard),
     ]
 
 def get_options_UI(width, height):
+    """Return options menu UI buttons."""
     return [
         Button("<", width // 2 -250, height // 2 -125, 80, 50, lambda: change_music_track(-1)),
         Button(">", width // 2 +170, height // 2 -125, 80, 50, lambda: change_music_track(+1)),
@@ -395,6 +413,7 @@ def get_options_UI(width, height):
     ]
 
 def get_pause_buttons(width, height):
+    """Return pause menu buttons."""
     return [
         Button("Continue", width // 2 - 100, height // 2 , 200, 80, resume_game),
         Button("Restart", width // 2 - 100, height // 2 +100, 200, 80, start_game),
@@ -403,6 +422,7 @@ def get_pause_buttons(width, height):
     ]
 
 def get_game_over_buttons(width, height):
+    """Return game over menu buttons."""
     return [
         Button("Try Again", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, start_game),
         Button("Main Menu", WIDTH // 2 - 100, HEIGHT // 2 + 160, 200, 50, return_to_menu),
@@ -410,6 +430,7 @@ def get_game_over_buttons(width, height):
     ]
 
 def get_enter_name_buttons(width, height):
+    """Return enter name menu buttons."""
     return [
         Button("Cancel", WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 50, go_back),
     ]
@@ -419,6 +440,7 @@ def get_enter_name_buttons(width, height):
 # GAME LOGIC & MECHANICS #
 ##########################
 
+# --- Game state variables ---
 score = 0
 level = 1
 lines_cleared = 0
@@ -436,20 +458,22 @@ lock_delay = 300 - level*10 # milliseconds
 lock_timer = None
 lock_pending = False
 
-# --- online Leaderboard ---
+# --- Online Leaderboard ---
 getting_scores = True
 is_online = True
 
 # --- Soft Drop ---
 soft_drop_active = False
-s_pressed_time = None  # Zeitpunkt, an dem "S" gedrückt wurde
-LONG_PRESS_THRESHOLD = 0.5  # Schwelle in Sekunden für langes Drücken
+s_pressed_time = None  # Time when 'S' was pressed
+LONG_PRESS_THRESHOLD = 0.5  # Threshold in seconds for long press
 
 
 def delay(milsec):
+    """Delay for the given milliseconds using pygame."""
     return pygame.time.delay(milsec)
 
 class ScorePopup:
+    """Popup for displaying score events (combos, line clears, etc)."""
     def __init__(self, text, x, y, big = False):
         self.text = text
         self.x = x
@@ -482,6 +506,7 @@ class ScorePopup:
 
 
 def create_piece():
+    """Create a new tetromino using the Tetris bag system."""
     #classic tetris bag system
     global shape_bag, previous_shape 
     if shape_bag == []:
@@ -502,12 +527,14 @@ def create_piece():
     }
 
 def rotate(matrix, input):
+    """Rotate a tetromino matrix left (Q) or right (E/W/UP)."""
     if input == 113:    # Key Q
         return list(zip(*matrix))[::-1]
     else:   # Key E,W,UP
         return [list(row)[::-1] for row in zip(*matrix)]
 
 def wall_kick(piece, rotated):
+    """Try to move a rotated piece left/right if blocked (wall kick)."""
     for dx in [0, -1, 1, -2, 2]:
         if valid_position(piece, dx=dx, rotated=rotated):
             piece['x'] += dx
@@ -515,6 +542,7 @@ def wall_kick(piece, rotated):
             return
 
 def valid_position(piece, dx=0, dy=0, rotated=None):
+    """Check if a piece is in a valid position on the board."""
     shape = rotated if rotated else piece['matrix']
     for y, row in enumerate(shape):
         for x, cell in enumerate(row):
@@ -528,12 +556,14 @@ def valid_position(piece, dx=0, dy=0, rotated=None):
     return True
 
 def merge_piece(piece):
+    """Merge the current piece into the board grid."""
     for y, row in enumerate(piece['matrix']):
         for x, cell in enumerate(row):
             if cell:
                 board[piece['y'] + y][piece['x'] + x] = piece['color']
 
 def clear_lines():
+    """Clear completed lines, update score, level, and trigger animations."""
     global board, score, lines_cleared, level, fall_speed, combo_count
     old_level = level
     new_board = []
@@ -612,6 +642,7 @@ def clear_lines():
     
         
 def move_piece(dx, dy):
+    """Move the current piece by (dx, dy) if possible."""
     global lock_timer, lock_pending, current_piece
     if valid_position(current_piece, dx, dy):
         current_piece['x'] += dx
@@ -623,6 +654,7 @@ def move_piece(dx, dy):
     return False
 
 def drop_piece():
+    """Drop the current piece by one row, or start lock delay if blocked."""
     global current_piece, used_hold, lock_timer, lock_pending
     if not move_piece(0, 1):
         if not lock_pending:
@@ -630,6 +662,7 @@ def drop_piece():
             lock_pending = True
 
 def soft_drop():
+    """Perform a soft drop (manual fast drop) for the current piece."""
     global current_piece, used_hold, lock_timer, lock_pending, score, soft_drop_active
     drops = 0
     while valid_position(current_piece, 0, 1) and soft_drop_active:
@@ -670,6 +703,7 @@ def soft_drop():
         score_popup.append(ScorePopup(f"+{drops} pts", popup_x, popup_y +30))
 
 def hard_drop():
+    """Perform a hard drop (instant drop) for the current piece."""
     global score, lock_pending, used_hold, current_piece
     drops = 0
     while move_piece(0, 1):
@@ -693,7 +727,7 @@ def hard_drop():
         game_over()
 
 def dyn_icon(current_piece):
-    # Dynamisches Game Icon
+    """Set the window icon based on the current piece shape."""
     shape = current_piece['shape']
     if shape == "I":
         dyn_icon = "I"
@@ -717,6 +751,7 @@ def dyn_icon(current_piece):
 
 
 def reset_game():
+    """Reset the game state for a new game."""
     global dyn_icon, icon, board, current_piece, next_queue, fall_time, fall_speed, score, level, lines_cleared, score_popup, hold_piece, used_hold
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
     next_queue = [create_piece() for _ in range(3)]
@@ -735,6 +770,7 @@ def reset_game():
     used_hold = False
 
 def hold_current_piece():
+    """Hold the current piece or swap with the held piece."""
     global hold_piece, current_piece, next_queue, used_hold
     if used_hold:
         return
@@ -756,6 +792,7 @@ def hold_current_piece():
 #############
 
 def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
+    """Draw a tetromino in a preview box (hold/next)."""
     matrix = piece['matrix']
     color = piece['color']
     for y, row in enumerate(matrix):
@@ -771,6 +808,7 @@ def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
 
 # Hold Piece 
 def draw_hold_piece():
+    """Draw the hold piece box and its contents."""
     box_width, box_height = 120, 120
     HOLD_PIECE_X = WIDTH // 2 - 350
     HOLD_PIECE_Y = 50
@@ -789,6 +827,7 @@ def draw_hold_piece():
     draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
 def draw_board(offset_x, offset_y):
+    """Draw the main Tetris board grid and filled cells."""
     for y in range(ROWS):
         for x in range(COLS):
             rect = pygame.Rect(offset_x + x * BLOCK_SIZE, offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
@@ -799,6 +838,7 @@ def draw_board(offset_x, offset_y):
                 pygame.draw.rect(screen, BLACK, rect, 2)
 
 def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
+    """Draw a tetromino in a preview box (hold/next)."""
     matrix = piece['matrix']
     color = piece['color']
     for y, row in enumerate(matrix):
@@ -810,6 +850,7 @@ def draw_piece_in_box(piece, offset_x, offset_y, scale=1.0):
                 pygame.draw.rect(screen, BLACK, rect, 1)
 
 def draw_next_pieces():
+    """Draw the next pieces preview box and its contents."""
     box_width, box_height = 160, 260
     NEXT_PIECE_X = WIDTH // 2 + 230
     NEXT_PIECE_Y = 100
@@ -828,6 +869,7 @@ def draw_next_pieces():
         draw_piece_in_box(piece, x_offset, y_offset, 0.75)
 
 def draw_hold_piece():
+    """Draw the hold piece box and its contents."""
     box_width, box_height = 120, 120
     HOLD_PIECE_X = WIDTH // 2 - 350
     HOLD_PIECE_Y = 50
@@ -846,6 +888,7 @@ def draw_hold_piece():
     draw_text_centered("Press F", HOLD_PIECE_Y+150, HOLD_PIECE_X + 50)
 
 def draw_piece(piece, offset_x, offset_y, ghost=False):
+    """Draw a tetromino on the board, optionally as a ghost piece."""
     color = piece['color']
     alpha = 100 if ghost else 255
     for y, row in enumerate(piece['matrix']):
@@ -861,12 +904,14 @@ def draw_piece(piece, offset_x, offset_y, ghost=False):
                     pygame.draw.rect(screen, BLACK, rect, 1)
 
 def get_ghost_piece(piece):
+    """Return a copy of the current piece in its lowest valid position (ghost)."""
     ghost = dict(piece)
     while valid_position(ghost, dy=1):
         ghost['y'] += 1
     return ghost
 
 def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colour=WHITE, font_size = 40, surface=None):
+    """Draw text centered at (x, y) with a border background."""
     if surface is None:
         surface = screen
     fnt = pygame.font.Font("game_design\\Pixel_Emulator.otf", font_size)
@@ -905,11 +950,13 @@ def draw_text_centered(text, y, x=None, bg_img="game_design\\Border_2.png", colo
 
 
 def get_bg_tile():
+    """Load and return the current background tile image and its size."""
     bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
     tile_width, tile_height = bg_tile.get_size()
     return bg_tile, tile_width, tile_height
 
 def draw_background():
+    """Draw the background image tiled to fill the screen."""
     bg_tile, tile_width, tile_height = get_bg_tile()
     for x in range(0, WIDTH, tile_width):
         for y in range(0, HEIGHT, tile_height):
@@ -920,6 +967,7 @@ bg_tile = pygame.image.load(f"game_design\\bg{bg_nr}.png").convert()
 tile_width, tile_height = bg_tile.get_size()
 
 def update_GUI():
+    """Update the GUI dimensions and redraw the background."""
     global WIDTH, HEIGHT
     WIDTH, HEIGHT = screen.get_size()
     screen.fill(BLACK)
@@ -929,7 +977,8 @@ def update_GUI():
 #############
 # MAIN LOOP #
 #############
-reset_game()
+
+# Main game loop: handles state, events, rendering, and game logic
 running = True
 
 def is_piece_fully_in_air(piece):
@@ -1068,6 +1117,8 @@ while running:
         if state == "MENU":
             getting_scores = True # Für Online-Leaderboard
             # Always get fresh button positions for current window size
+            icon = pygame.image.load("game_design\\icon2.png").convert_alpha()
+            pygame.display.set_icon(icon)
             menu_buttons = get_menu_buttons(WIDTH, HEIGHT)
             if menu_transition_done:
                 for btn in menu_buttons:

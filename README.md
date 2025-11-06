@@ -1,10 +1,61 @@
-Ein einfaches Tetris in Python, mit Sounds und einem Online-Leaderboard (Der Server ist nicht dauerhaft verfügbar).
+# Tetris 
 
-Alle benötigten Module sollten beim ersten Start automatisch installiert werden.
+A feature-rich Tetris clone built with Python and Pygame.
 
-Steuerung:
-AD - Seitlich bewegen
-S - kurz: runter / lang: softdrop
-Leertaste: Harddrop
-W/QE: Drehen
-Escape: Pause/zurück
+## Features
+
+- Retro pixel-style UI with animated transitions
+- Multiple music tracks and sound effects
+- Hold system and multi-piece preview queue
+- Online and local leaderboards (with encryption)
+- Configurable volume for music and sound effects
+- Ghost piece, hard/soft drop, and wall-kick mechanics
+- Score saving with encryption using `cryptography.Fernet`
+- Fullscreen and windowed display modes
+- Game settings saved in `config.txt`
+
+## Requirements
+
+The required Python modules are automatically installed if missing:
+
+- `pygame`
+- `cryptography`
+- `requests`
+- `os` 
+- `random`
+- `time`
+- `sys`
+- `subprocess`
+- `importlib`.
+
+
+## Controls
+
+| Key        | Action                       |
+|------------|------------------------------|
+| A / Left   | Move left                    |
+| D / Right  | Move right                   |
+| S / Down   | Soft drop (hold for auto)    |
+| Space      | Hard drop                    |
+| Q / E / W / Up | Rotate piece             |
+| F          | Hold piece                   |
+| ESC        | Pause or go back             |
+| F11        | Toggle fullscreen            |
+| Enter      | Confirm name on score screen |
+| Backspace  | Delete character in name     |
+
+## Score System
+
+- Scores are encrypted using a generated key.
+- If online, scores are uploaded to the server.
+- If offline, scores are saved locally and uploaded when possible.
+
+## Notes
+
+- Have fun!
+
+
+## Disclaimer
+
+This project is intended for educational and entertainment use only.
+
