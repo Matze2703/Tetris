@@ -8,18 +8,17 @@ def install_and_import(package_name):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
 # Alle Module installieren
-required_modules = ["PyTorch", "gymnasium", "numpy", "pandas", "matplotlib", "tqdm", "collections", "time", "pygame"]
+required_modules = ["torch", "gymnasium", "numpy", "matplotlib", "tqdm", "pygame"]
 
 for module in required_modules:
     install_and_import(module)
 
-
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import random
 import os
-import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import trange
 from collections import deque
@@ -46,7 +45,9 @@ class DQN(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, output_dim)
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, output_dim)
         )
 
     def forward(self, x):
@@ -75,10 +76,10 @@ def play_sound(soundfile):
 def train():
     play_sound("line_clear.mp3")
     episodes = int(input("\nTrainingsepisoden: "))
-    batch_size = 128     #Belastung von CPU/GPU
+    batch_size = 64     #Belastung von CPU/GPU
     gamma = 0.99
     epsilon = 1.0
-    epsilon_decay = 0.99
+    epsilon_decay = 0.9995
     epsilon_min = 0.05
     learning_rate = 1e-3
 
@@ -120,20 +121,22 @@ def train():
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_episode = checkpoint["episode"] + 1
+        epsilon = checkpoint["epsilon"]
         print(f"Modell geladen, fortsetzen bei Episode {start_episode}")
     else:
         print("Kein Modell gefunden")
 
     current_phase = -1  # für Logging
     for episode in trange(start_episode, start_episode + episodes, desc="KI Training"):
-        # Dynamische Aktionsfreigabe je Episode
-        if episode < 1000:
-            allowed_actions = [0, 1, 2, 4]  # Phase 1 + Test mit Rotation?
+        # Dynamische Aktionsfreigabe je Episode (Curriculum Learning)
+        if episode < 5000:
+            allowed_actions = [0, 1, 2]  # Phase 1: nur Movement
             phase = 0
-        elif episode < 2000:
+        elif episode > 15000:
             allowed_actions = [0, 1, 2, 4]  # Phase 2: + Rotation
             phase = 1
-        elif episode < 3000:
+        elif episode > 30000:
+            epsilon = 1.0   #Epsilon resetten, um KI mit Hard Drop experimentieren zu lassen
             allowed_actions = [0, 1, 2, 4, 5]  # Phase 3: + Hard Drop
             phase = 2
         else:
@@ -205,7 +208,8 @@ def train():
     torch.save({
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
-        "episode": start_episode + episodes - 1
+        "episode": start_episode + episodes - 1,
+        "epsilon": epsilon
     }, model_path)
 
     print(f"Finales Modell gespeichert als {model_path}")
@@ -230,6 +234,7 @@ def train():
         print(f"Gesamttraining: {len(all_scores)} Episoden")
         print(f"Durchschnittsscore: {sum(all_scores) / len(all_scores):.2f}")
         print(f"Höchster Score: {max(all_scores)}")
+        print(f"Epsilon: {epsilon}")
     else:
         print(f"Warnung: Keine {csv_path} gefunden zum Plotten.")
 
@@ -272,7 +277,8 @@ def play_demo_episode(model, env, device):
         done = terminated or truncated
         state = torch.tensor(next_obs.flatten(), dtype=torch.float32).unsqueeze(0).to(device)
         total_reward += reward
-        print(f"Aktion: {action} | Reward: {reward}")
+        if reward != 0:
+            print(f"Reward: {reward}\n")
         time.sleep(0.05)  # Slow down for visibility
 
     print(f"\n    Vorzeigerunde abgeschlossen:")

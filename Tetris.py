@@ -33,7 +33,7 @@ def install_and_import(package_name):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
 # Alle Module installieren
-required_modules = ["requests", "os", "random","time","cryptography","pygame"]
+required_modules = ["requests", "os", "random","cryptography","pygame"]
 
 for module in required_modules:
     install_and_import(module)

@@ -13,23 +13,19 @@ TETROMINOS = {
     'I': [[1],
           [1],
           [1],
-          [1],],
+          [1]],
     'O': [[1, 1],
           [1, 1]],
     'T': [[0, 1, 0],
           [1, 1, 1]],
-    'S': [[1, 0],
-          [1, 1],
-          [0, 1]],
-    'Z': [[0, 1],
-          [1, 1],
-          [1, 0]],
-    'J': [[0, 1],
-          [0, 1],
-          [1, 1]],
-    'L': [[1, 0],
-          [1, 0],
-          [1, 1]],
+#    'S': [[0, 1, 1],
+ #         [1, 1, 0]],
+#    'Z': [[1, 1, 0],
+ #         [0, 1, 1]],
+    'J': [[1, 0, 0],
+          [1, 1, 1]],
+    'L': [[0, 0, 1],
+          [1, 1, 1]],
 }
 
 class TetrisEnv(gym.Env):
@@ -104,14 +100,31 @@ class TetrisEnv(gym.Env):
                 return ROWS - y
         return 0
 
-    #Bestrafung für Löcher
-    def _punish_free_space(self):
+    #Bestrafung für Löcher und Belohnung für Verbindungen
+    def _reward_spacing(self):
         reward = 0
         # Finde für jede Spalte die unterste besetzte Zelle
         column_lowest = {}
         
         # Durchlaufe alle Zellen des Tetrominos von unten nach oben
         for py in range(len(self.current_piece)-1, -1, -1):
+
+            y = self.piece_y + py
+            #linkeste und rechteste Zelle des Tetrominos bestimmen
+            x_left = self.piece_x
+            x_right = self.piece_x + len(self.current_piece[py]) -1
+
+            # Prüfe links und rechts auf besetzte Nachbarzellen und belohne für jede 
+            if 0 <= x_left-1 < COLS and 0 <= y < ROWS and self.board[y][x_left-1] == 1:  # Links
+                reward += 3
+                if not self.skip_render:
+                    print(f"Nachbar links +3")
+            if 0 <= x_right+1 < COLS and 0 <= y < ROWS and self.board[y][x_right+1] == 1:  # Rechts
+                reward += 3
+                if not self.skip_render:
+                    print(f"Nachbar rechts +3")
+            
+            #Alle Zellen von links nach rechts
             for px, cell in enumerate(self.current_piece[py]):
                 if not cell:
                     continue
@@ -132,12 +145,18 @@ class TetrisEnv(gym.Env):
                 if self.board[below_y][x] == 0:  # Leerer Raum darunter
                     self.board[below_y][x] = 2  # Markiere als bestraftes Loch
                     reward -= 5
+                    if not self.skip_render:
+                        print(f"Lücke hinterlassen -5")
                     
         return reward
 
 
     def _lock_piece(self):
-        reward = 0
+        
+        # Belohnung fürs Platzieren
+        reward = 5
+        if not self.skip_render:
+            print("Basis reward +5")
 
         # Stein ins Board einfügen, ersetze 2er durch 1er
         for py, row in enumerate(self.current_piece):
@@ -145,9 +164,21 @@ class TetrisEnv(gym.Env):
                 if cell:
                     x, y = self.piece_x + px, self.piece_y + py
                     if 0 <= y < ROWS and 0 <= x < COLS:
-                        if self.board[y][x] == 2:
-                            reward += 10  # Bonus für das Füllen eines bestraften Feldes
-                        self.board[y][x] = 1  # Normales Blockfeld
+                        # Bonus für das Füllen eines zuvor als "punished" markierten Feldes
+                        if self.punished_spaces[y][x]:
+                            reward += 10
+                            if not self.skip_render:
+                                print("filled punished +5")
+                            self.punished_spaces[y][x] = False
+                        
+                        # Zurückwandeln in Normales Blockfeld
+                        self.board[y][x] = 1
+
+        #Belohnen für niedriges PLatzieren + Bestrafung für hohes Platzieren
+        reward += (self.piece_y-13)*2
+        if not self.skip_render:
+            print(f"niedriges Placement +{(self.piece_y-13)*2}")
+
 
         # Linien löschen - NUR VOLLSTÄNDIG MIT 1 GEFÜLLTE REIHEN
         full_rows = []
@@ -169,18 +200,9 @@ class TetrisEnv(gym.Env):
         self.level = 1 + self.lines_cleared // 5
 
         # Bestrafung Löcher
-        reward += self._punish_free_space()
+        reward += self._reward_spacing()
 
         self._spawn_piece()
-
-        # Belohnung fürs Platzieren
-        reward += 5
-
-        # Bestrafe hohe Stapel
-        current_height = self._get_max_height()
-        if current_height > self.max_height:
-            reward -= (current_height - self.max_height) * 10
-            self.max_height = current_height
 
         return reward
 
@@ -239,6 +261,8 @@ class TetrisEnv(gym.Env):
         if not self._valid_position(self.current_piece, self.piece_x, self.piece_y):
             terminated = True
             reward -= 100
+            if not self.skip_render:
+                print("Game Over -100")
 
         obs = self._get_obs()
         return obs, reward, terminated, truncated, {}
